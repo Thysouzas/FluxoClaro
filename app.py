@@ -22,7 +22,7 @@ st.set_page_config(
 )
 
 # --- CONFIGURAÇÃO DO SEU SERVIDOR GITHUB ---
-GITHUB_TOKEN = "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"
+GITHUB_TOKEN = "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"
 REPO_NAME = "Thysouzas/FluxoClaro"
 ARQUIVO_DADOS = "dados_fluxo.json"
 

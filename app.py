@@ -76,8 +76,7 @@ def salvar_na_nuvem(dados_dict):
     return resp.status_code in [200, 201]
 
 
-# CSS construído em lista segura (impede erros de aspas triplas cortadas)
- Regras_CSS = [
+Regras_CSS = [
     "<style>",
     "@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800;900&display=swap');",
     "html, body, [class*='css'] { font-family: 'Poppins', sans-serif; background-color: #F4F5FC; color: #001089; }",
@@ -203,7 +202,6 @@ if "metas_economia" not in st.session_state:
             st.session_state.metas_economia = m_data["metas_economia"]
             break
 
-# Barra Lateral Flutuante
 with st.sidebar:
     st.header("📅 Data")
 
@@ -358,7 +356,6 @@ with st.sidebar:
                 dict_alvo.pop(cat_excluir, None)
                 st.rerun()
 
-# Sincroniza estado atual
 st.session_state.dados_meses[mes_referencia] = {
     "entradas": st.session_state.entradas,
     "essenciais": st.session_state.essenciais,
@@ -397,7 +394,6 @@ pct_sobra = (
     (sobra_mensal / total_entradas * 100) if total_entradas > 0 else 0.0
 )
 
-# BANNER DE TOPO (Sem usar triple quotes para nunca quebrar)
 banner_html = (
     '<div class="hero-banner">'
     '<div>'
@@ -409,7 +405,6 @@ banner_html = (
 )
 st.markdown(banner_html, unsafe_allow_html=True)
 
-# 6 CARTÕES DE MÉTRICAS
 c1, c2, c3, c4, c5, c6 = st.columns(6)
 c1.metric(
     "1. Total de Entradas",

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Painel Gerencial de Controle Financeiro Pessoal — FluxoClaro (Com Servidor GitHub & Histórico Mensal)
+Painel Gerencial de Controle Financeiro Pessoal — FluxoClaro (Com Servidor GitHub & Saldo Acumulado)
 Identidade Visual Oficial:
 - Cores Principais: #001089, #9918ed, #6e1aac
 - Variação de Cores (Fundo Sempre Claro): #e8e9f9, #b9c2f9, #dfd3ea, #e9e8ea
@@ -175,6 +175,21 @@ def get_default_mes():
   }
 
 
+ordem_meses = [
+    "Janeiro 2026",
+    "Fevereiro 2026",
+    "Março 2026",
+    "Abril 2026",
+    "Maio 2026",
+    "Junho 2026",
+    "Julho 2026",
+    "Agosto 2026",
+    "Setembro 2026",
+    "Outubro 2026",
+    "Novembro 2026",
+    "Dezembro 2026",
+]
+
 # Inicialização dos dados globais da nuvem
 if "dados_meses" not in st.session_state:
   nuvem = carregar_da_nuvem()
@@ -183,7 +198,6 @@ if "dados_meses" not in st.session_state:
   )
 
 if "metas_economia" not in st.session_state:
-  # Tenta recuperar metas do primeiro mês disponível ou deixa vazio
   st.session_state.metas_economia = []
   for m_data in st.session_state.dados_meses.values():
     if isinstance(m_data, dict) and "metas_economia" in m_data:
@@ -195,20 +209,7 @@ with st.sidebar:
   st.header("Configurações & Servidor")
   mes_referencia = st.selectbox(
       "Mês de Referência",
-      [
-          "Janeiro 2026",
-          "Fevereiro 2026",
-          "Março 2026",
-          "Abril 2026",
-          "Maio 2026",
-          "Junho 2026",
-          "Julho 2026",
-          "Agosto 2026",
-          "Setembro 2026",
-          "Outubro 2026",
-          "Novembro 2026",
-          "Dezembro 2026",
-      ],
+      ordem_meses,
       index=10,
   )
 
@@ -221,9 +222,15 @@ with st.sidebar:
       st.session_state.dados_meses[mes_referencia] = get_default_mes()
 
     m_atual = st.session_state.dados_meses[mes_referencia]
-    st.session_state.entradas = m_atual.get("entradas", get_default_mes()["entradas"]).copy()
-    st.session_state.essenciais = m_atual.get("essenciais", get_default_mes()["essenciais"]).copy()
-    st.session_state.nao_essenciais = m_atual.get("nao_essenciais", get_default_mes()["nao_essenciais"]).copy()
+    st.session_state.entradas = m_atual.get(
+        "entradas", get_default_mes()["entradas"]
+    ).copy()
+    st.session_state.essenciais = m_atual.get(
+        "essenciais", get_default_mes()["essenciais"]
+    ).copy()
+    st.session_state.nao_essenciais = m_atual.get(
+        "nao_essenciais", get_default_mes()["nao_essenciais"]
+    ).copy()
     st.session_state.mes_atual_ativo = mes_referencia
 
   st.divider()
@@ -233,7 +240,6 @@ with st.sidebar:
       use_container_width=True,
       type="primary",
   ):
-    # Atualiza o mês atual no dicionário global
     st.session_state.dados_meses[mes_referencia] = {
         "entradas": st.session_state.entradas,
         "essenciais": st.session_state.essenciais,
@@ -312,6 +318,13 @@ with st.sidebar:
         dict_alvo.pop(cat_excluir, None)
         st.rerun()
 
+# Atualiza temporariamente o mês ativo no dicionário global para cálculos corretos
+st.session_state.dados_meses[mes_referencia] = {
+    "entradas": st.session_state.entradas,
+    "essenciais": st.session_state.essenciais,
+    "nao_essenciais": st.session_state.nao_essenciais,
+}
+
 # Cálculos Automáticos Globais do Mês Ativo
 total_entradas = sum(st.session_state.entradas.values())
 total_essenciais = sum(st.session_state.essenciais.values())
@@ -320,10 +333,27 @@ total_despesas = total_essenciais + total_nao_essenciais
 sobra_mensal = total_entradas - total_despesas
 reserva_ideal = total_essenciais * meses_reserva
 
-# Cabeçalho e Indicadores no Topo
+# Cálculo do Saldo Acumulado (Caixinha) de Janeiro até o Mês Selecionado
+try:
+  idx_atual = ordem_meses.index(mes_referencia)
+except ValueError:
+  idx_atual = 0
+
+saldo_acumulado = 0.0
+for i in range(idx_atual + 1):
+  m_nome = ordem_meses[i]
+  if m_nome in st.session_state.dados_meses:
+    d = st.session_state.dados_meses[m_nome]
+    t_ent = sum(d.get("entradas", {}).values())
+    t_esp = sum(d.get("essenciais", {}).values()) + sum(
+        d.get("nao_essenciais", {}).values()
+    )
+    saldo_acumulado += t_ent - t_esp
+
+# Cabeçalho e Indicadores no Topo (6 Colunas)
 st.title(f"FluxoClaro — Painel Gerencial ({mes_referencia})")
 
-c1, c2, c3, c4, c5 = st.columns(5)
+c1, c2, c3, c4, c5, c6 = st.columns(6)
 c1.metric("1. Total de Entradas", format_brl(total_entradas))
 c2.metric(
     "2. Despesas Essenciais",
@@ -350,7 +380,12 @@ c4.metric(
     ),
 )
 c5.metric(
-    f"5. Reserva Ideal ({meses_reserva}m)",
+    "5. Saldo Acumulado (Caixinha)",
+    format_brl(saldo_acumulado),
+    "Acumulado no ano",
+)
+c6.metric(
+    f"6. Reserva Ideal ({meses_reserva}m)",
     format_brl(reserva_ideal),
     f"Faltam {format_brl(max(0.0, reserva_ideal - saldo_atual_reserva))}",
 )
@@ -401,39 +436,14 @@ with aba_planilha:
 with aba_graficos:
   st.subheader("1. Evolução em Coluna Mensal (Entradas vs Despesas)")
 
-  # Constrói o histórico baseado nos meses salvos em st.session_state.dados_meses
-  # Garante que o mês atual ativo também reflita os valores correntes da tela
-  st.session_state.dados_meses[mes_referencia] = {
-      "entradas": st.session_state.entradas,
-      "essenciais": st.session_state.essenciais,
-      "nao_essenciais": st.session_state.nao_essenciais,
-  }
-
   historico_data = []
-  ordem_meses = [
-      "Janeiro 2026",
-      "Fevereiro 2026",
-      "Março 2026",
-      "Abril 2026",
-      "Maio 2026",
-      "Junho 2026",
-      "Julho 2026",
-      "Agosto 2026",
-      "Setembro 2026",
-      "Outubro 2026",
-      "Novembro 2026",
-      "Dezembro 2026",
-  ]
-
   for m in ordem_meses:
     if m in st.session_state.dados_meses:
       d = st.session_state.dados_meses[m]
       t_ent = sum(d.get("entradas", {}).values())
       t_ess = sum(d.get("essenciais", {}).values())
       t_ness = sum(d.get("nao_essenciais", {}).values())
-      sobra = t_ent - (t_ess + t_ness)
 
-      # Adiciona colunas para gráfico agrupado
       historico_data.append(
           {"Mês": m, "Categoria": "Entradas", "Valor": t_ent}
       )

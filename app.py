@@ -1,13 +1,15 @@
 # -*- coding: utf-8 -*-
 """
-Painel Gerencial de Controle Financeiro Pessoal — FluxoClaro
+Painel Gerencial de Controle Financeiro Pessoal — FluxoClaro (Com Servidor GitHub)
 Identidade Visual Oficial:
 - Cores Principais: #001089, #9918ed, #6e1aac
 - Variação de Cores (Fundo Sempre Claro): #e8e9f9, #b9c2f9, #dfd3ea, #e9e8ea
 - Tipografia: Poppins Black (Títulos) e Poppins ExtraBold (Subtítulos)
 """
 
+import base64
 import json
+import requests
 import pandas as pd
 import plotly.express as px
 import streamlit as st
@@ -18,6 +20,56 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded",
 )
+
+# --- CONFIGURAÇÃO DO SEU SERVIDOR GITHUB ---
+GITHUB_TOKEN = "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"
+REPO_NAME = "Thysouzas/FluxoClaro"
+ARQUIVO_DADOS = "dados_fluxo.json"
+
+
+def carregar_da_nuvem():
+  url = f"https://api.github.com/repos/{REPO_NAME}/contents/{ARQUIVO_DADOS}"
+  headers = {
+      "Authorization": f"token {GITHUB_TOKEN}",
+      "Accept": "application/vnd.github.v3+json",
+  }
+
+  try:
+    r = requests.get(url, headers=headers)
+    if r.status_code == 200:
+      content_encoded = r.json().get("content")
+      decoded = base64.b64decode(content_encoded).decode("utf-8")
+      return json.loads(decoded)
+  except Exception:
+    pass
+  return None
+
+
+def salvar_na_nuvem(dados_dict):
+  url = f"https://api.github.com/repos/{REPO_NAME}/contents/{ARQUIVO_DADOS}"
+  headers = {
+      "Authorization": f"token {GITHUB_TOKEN}",
+      "Accept": "application/vnd.github.v3+json",
+  }
+
+  r = requests.get(url, headers=headers)
+  sha = r.json().get("sha") if r.status_code == 200 else None
+
+  conteudo_str = json.dumps(dados_dict, ensure_ascii=False, indent=4)
+  conteudo_base64 = base64.b64encode(conteudo_str.encode("utf-8")).decode(
+      "utf-8"
+  )
+
+  payload = {
+      "message": "Atualização de dados financeiros via FluxoClaro",
+      "content": conteudo_base64,
+  }
+  if sha:
+    payload["sha"] = sha
+
+  resp = requests.put(url, headers=headers, json=payload)
+  return resp.status_code in [200, 201]
+
 
 # CSS com Tipografia Poppins Black / ExtraBold e Paleta Sempre Clara
 st.markdown(
@@ -63,52 +115,63 @@ def format_brl(valor: float) -> str:
   return f"R$ {valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
 
-# 1. Inicialização do Session State
+# Carregar dados salvos na nuvem ao iniciar
+dados_nuvem = carregar_da_nuvem()
+
 if "entradas" not in st.session_state:
-  st.session_state.entradas = {
-      "Salário Líquido (Pessoa 01)": 0.0,
-      "Salário Líquido (Pessoa 02)": 0.0,
-      "Vale-Alimentação (VA)": 0.0,
-      "Vale-Refeição (VR)": 0.0,
-      "Outras Entradas: Uber / Apps / Freelance": 0.0,
-      "Outras Entradas: Comissões / Bônus": 0.0,
-      "Outras Entradas: Aluguel / Dividendos": 0.0,
-  }
+  if dados_nuvem and "entradas" in dados_nuvem:
+    st.session_state.entradas = dados_nuvem["entradas"]
+  else:
+    st.session_state.entradas = {
+        "Salário Líquido (Pessoa 01)": 0.0,
+        "Salário Líquido (Pessoa 02)": 0.0,
+        "Vale-Alimentação (VA)": 0.0,
+        "Vale-Refeição (VR)": 0.0,
+        "Outras Entradas: Uber / Apps / Freelance": 0.0,
+        "Outras Entradas: Comissões / Bônus": 0.0,
+        "Outras Entradas: Aluguel / Dividendos": 0.0,
+    }
 
 if "essenciais" not in st.session_state:
-  st.session_state.essenciais = {
-      "Moradia (Financiamento / Aluguel)": 0.0,
-      "Condomínio": 0.0,
-      "Supermercado": 0.0,
-      "Água e Saneamento": 0.0,
-      "Luz (Energia Elétrica)": 0.0,
-      "Gás (Encanado / Botijão)": 0.0,
-      "IPTU": 0.0,
-      "Plano de Saúde": 0.0,
-      "MEI (DAS)": 0.0,
-      "Investimentos Obrigatórios": 0.0,
-      "Faculdade / Educação": 0.0,
-  }
+  if dados_nuvem and "essenciais" in dados_nuvem:
+    st.session_state.essenciais = dados_nuvem["essenciais"]
+  else:
+    st.session_state.essenciais = {
+        "Moradia (Financiamento / Aluguel)": 0.0,
+        "Condomínio": 0.0,
+        "Supermercado": 0.0,
+        "Água e Saneamento": 0.0,
+        "Luz (Energia Elétrica)": 0.0,
+        "Gás (Encanado / Botijão)": 0.0,
+        "IPTU": 0.0,
+        "Plano de Saúde": 0.0,
+        "MEI (DAS)": 0.0,
+        "Investimentos Obrigatórios": 0.0,
+        "Faculdade / Educação": 0.0,
+    }
 
 if "nao_essenciais" not in st.session_state:
-  st.session_state.nao_essenciais = {
-      "Cartão de Crédito PF": 0.0,
-      "Cartão de Crédito PJ": 0.0,
-      "Farmácia": 0.0,
-      "Gastos com Animais (Pet)": 0.0,
-      "Imprevistos": 0.0,
-      "Transporte (Ônibus / Trem / Uber)": 0.0,
-      "Veículo (Seguro / IPVA / Manutenção)": 0.0,
-      "Combustível": 0.0,
-      "Internet Residencial": 0.0,
-      "Streaming (Netflix / Amazon / Spotify)": 0.0,
-      "Padaria / Feira": 0.0,
-      "Lazer / Cinema / Restaurantes": 0.0,
-      "Salão / Manicure / Barbearia": 0.0,
-      "Tarifas Bancárias": 0.0,
-      "Telefonia Móvel": 0.0,
-      "Outras Despesas: Presentes e Diversos": 0.0,
-  }
+  if dados_nuvem and "nao_essenciais" in dados_nuvem:
+    st.session_state.nao_essenciais = dados_nuvem["nao_essenciais"]
+  else:
+    st.session_state.nao_essenciais = {
+        "Cartão de Crédito PF": 0.0,
+        "Cartão de Crédito PJ": 0.0,
+        "Farmácia": 0.0,
+        "Gastos com Animais (Pet)": 0.0,
+        "Imprevistos": 0.0,
+        "Transporte (Ônibus / Trem / Uber)": 0.0,
+        "Veículo (Seguro / IPVA / Manutenção)": 0.0,
+        "Combustível": 0.0,
+        "Internet Residencial": 0.0,
+        "Streaming (Netflix / Amazon / Spotify)": 0.0,
+        "Padaria / Feira": 0.0,
+        "Lazer / Cinema / Restaurantes": 0.0,
+        "Salão / Manicure / Barbearia": 0.0,
+        "Tarifas Bancárias": 0.0,
+        "Telefonia Móvel": 0.0,
+        "Outras Despesas: Presentes e Diversos": 0.0,
+    }
 
 if "metas_economia" not in st.session_state:
   st.session_state.metas_economia = [
@@ -134,9 +197,9 @@ if "metas_economia" not in st.session_state:
       },
   ]
 
-# Barra Lateral: Configurações, Reserva e Gestão de Backup
+# Barra Lateral: Configurações, Reserva e Botão de Servidor
 with st.sidebar:
-  st.header("Configurações & Backup")
+  st.header("Configurações & Servidor")
   mes_referencia = st.selectbox(
       "Mês de Referência",
       [
@@ -157,41 +220,22 @@ with st.sidebar:
   )
 
   st.divider()
-  st.subheader("💾 Gestão de Dados (Backup)")
-  
-  dados_app = {
-      "entradas": st.session_state.entradas,
-      "essenciais": st.session_state.essenciais,
-      "nao_essenciais": st.session_state.nao_essenciais,
-  }
-  json_str = json.dumps(dados_app, ensure_ascii=False, indent=4)
-  st.download_button(
-      label="📥 Descarregar Backup",
-      data=json_str,
-      file_name="fluxoclaro_backup.json",
-      mime="application/json",
+  st.subheader("☁️ Servidor na Nuvem")
+  if st.button(
+      "💾 Salvar / Confirmar na Nuvem",
       use_container_width=True,
-  )
-
-  arquivo_carregado = st.file_uploader(
-      "📂 Restaurar Backup", type=["json"]
-  )
-  if arquivo_carregado is not None:
-    try:
-      dados_carregados = json.load(arquivo_carregado)
-      st.session_state.entradas = dados_carregados.get(
-          "entradas", st.session_state.entradas
-      )
-      st.session_state.essenciais = dados_carregados.get(
-          "essenciais", st.session_state.essenciais
-      )
-      st.session_state.nao_essenciais = dados_carregados.get(
-          "nao_essenciais", st.session_state.nao_essenciais
-      )
-      st.success("Backup restaurado com sucesso!")
-      st.rerun()
-    except Exception as e:
-      st.error(f"Erro ao ler o ficheiro: {e}")
+      type="primary",
+  ):
+    pacote_dados = {
+        "entradas": st.session_state.entradas,
+        "essenciais": st.session_state.essenciais,
+        "nao_essenciais": st.session_state.nao_essenciais,
+    }
+    sucesso = salvar_na_nuvem(pacote_dados)
+    if sucesso:
+      st.success("Dados salvos com sucesso no servidor!")
+    else:
+      st.error("Erro ao salvar no GitHub.")
 
   st.divider()
   st.subheader("Reserva de Emergência")
@@ -337,167 +381,4 @@ with aba_planilha:
   with col_ness:
     st.subheader("3. Despesas Não Essenciais")
     for k, v in list(st.session_state.nao_essenciais.items()):
-      st.session_state.nao_essenciais[k] = st.number_input(
-          k, min_value=0.0, value=float(v), step=20.0, key=f"ness_{k}"
-      )
-    st.info(
-        f"**TOTAL NÃO ESSENCIAIS:**"
-        f" {format_brl(sum(st.session_state.nao_essenciais.values()))}"
-    )
-
-with aba_graficos:
-  st.subheader(
-      "1. Gráfico de Barras Interativo: Categorias de Entradas vs. Despesas"
-  )
-  dados_barras = (
-      [
-          {"Categoria": k, "Valor": v, "Tipo": "1. Entradas"}
-          for k, v in st.session_state.entradas.items()
-          if v > 0
-      ]
-      + [
-          {"Categoria": k, "Valor": v, "Tipo": "2. Despesas Essenciais"}
-          for k, v in st.session_state.essenciais.items()
-          if v > 0
-      ]
-      + [
-          {"Categoria": k, "Valor": v, "Tipo": "3. Despesas Não Essenciais"}
-          for k, v in st.session_state.nao_essenciais.items()
-          if v > 0
-      ]
-  )
-  if dados_barras:
-    df_barras = pd.DataFrame(dados_barras).sort_values(
-        by="Valor", ascending=True
-    )
-    fig_barras = px.bar(
-        df_barras,
-        x="Valor",
-        y="Categoria",
-        color="Tipo",
-        orientation="h",
-        text_auto=".2f",
-        color_discrete_map={
-            "1. Entradas": "#001089",
-            "2. Despesas Essenciais": "#6e1aac",
-            "3. Despesas Não Essenciais": "#9918ed",
-        },
-    )
-    fig_barras.update_layout(
-        paper_bgcolor="#FFFFFF", plot_bgcolor="#FFFFFF", font_color="#001089"
-    )
-    st.plotly_chart(fig_barras, use_container_width=True)
-
-  st.divider()
-  st.subheader(
-      "2. Gráficos de Pizza: Distribuição das Despesas Essenciais e Não"
-      " Essenciais"
-  )
-  p_col1, p_col2, p_col3 = st.columns(3)
-
-  with p_col1:
-    df_macro = pd.DataFrame({
-        "Grupo": ["Despesas Essenciais", "Despesas Não Essenciais"],
-        "Valor": [total_essenciais, total_nao_essenciais],
-    })
-    fig_p1 = px.pie(
-        df_macro,
-        names="Grupo",
-        values="Valor",
-        hole=0.45,
-        title="Proporção Geral de Despesas",
-        color="Grupo",
-        color_discrete_map={
-            "Despesas Essenciais": "#001089",
-            "Despesas Não Essenciais": "#9918ed",
-        },
-    )
-    fig_p1.update_layout(paper_bgcolor="#FFFFFF", font_color="#001089")
-    st.plotly_chart(fig_p1, use_container_width=True)
-
-  with p_col2:
-    df_ess = pd.DataFrame([
-        {"Item": k, "Valor": v}
-        for k, v in st.session_state.essenciais.items()
-        if v > 0
-    ])
-    if not df_ess.empty:
-      fig_p2 = px.pie(
-          df_ess,
-          names="Item",
-          values="Valor",
-          hole=0.45,
-          title="Detalhamento: Despesas Essenciais",
-          color_discrete_sequence=[
-              "#001089",
-              "#6e1aac",
-              "#9918ed",
-              "#b9c2f9",
-              "#dfd3ea",
-          ],
-      )
-      fig_p2.update_layout(paper_bgcolor="#FFFFFF", font_color="#001089")
-      st.plotly_chart(fig_p2, use_container_width=True)
-
-  with p_col3:
-    df_ness = pd.DataFrame([
-        {"Item": k, "Valor": v}
-        for k, v in st.session_state.nao_essenciais.items()
-        if v > 0
-    ])
-    if not df_ness.empty:
-      fig_p3 = px.pie(
-          df_ness,
-          names="Item",
-          values="Valor",
-          hole=0.45,
-          title="Detalhamento: Não Essenciais",
-          color_discrete_sequence=[
-              "#9918ed",
-              "#6e1aac",
-              "#001089",
-              "#b9c2f9",
-              "#dfd3ea",
-          ],
-      )
-      fig_p3.update_layout(paper_bgcolor="#FFFFFF", font_color="#001089")
-      st.plotly_chart(fig_p3, use_container_width=True)
-
-with aba_metas:
-  st.subheader("Metas de Economia Mensal vs. Gastos Reais")
-  todas_categorias_despesa = {
-      **st.session_state.essenciais,
-      **st.session_state.nao_essenciais,
-  }
-
-  with st.expander("➕ Adicionar Nova Meta de Economia"):
-    m_titulo = st.text_input("Descrição da Meta (ex: Economizar em Lazer)")
-    m_cat = st.selectbox(
-        "Categoria Vinculada",
-        ["SOBRA_MENSAL"] + list(todas_categorias_despesa.keys()),
-    )
-    m_valor = st.number_input(
-        "Valor da Meta / Teto (R$)", min_value=10.0, value=500.0, step=50.0
-    )
-    if st.button("Salvar Meta"):
-      st.session_state.metas_economia.append({
-          "titulo": m_titulo or f"Meta {m_cat}",
-          "categoria": m_cat,
-          "meta": float(m_valor),
-      })
-      st.rerun()
-
-  for idx, meta in enumerate(list(st.session_state.metas_economia)):
-    cat = meta["categoria"]
-    alvo = meta["meta"]
-    real = (
-        max(0.0, sobra_mensal)
-        if cat == "SOBRA_MENSAL"
-        else todas_categorias_despesa.get(cat, 0.0)
-    )
-    pct = min(1.0, real / alvo) if alvo > 0 else 0.0
-    st.markdown(
-        f"**{meta['titulo']}** — Atual: {format_brl(real)} / Meta:"
-        f" {format_brl(alvo)}"
-    )
-    st.progress(pct)
+      st.session_state.nao_essenciais[k] = st.number

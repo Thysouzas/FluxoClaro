@@ -5,10 +5,11 @@ Identidade Visual Oficial:
 - Cores Principais: #001089, #9918ed, #6e1aac
 - Variação de Cores (Fundo Sempre Claro): #e8e9f9, #b9c2f9, #dfd3ea, #e9e8ea
 - Tipografia: Poppins Black (Títulos) e Poppins ExtraBold (Subtítulos)
-- Persistência: Banco de Dados SQLite integrado com salvamento instantâneo.
+- Persistência: Sincronização em tempo real com Google Sheets.
 """
 
-import sqlite3
+import gspread
+from oauth2client.service_account import ServiceAccountCredentials
 import pandas as pd
 import plotly.express as px
 import streamlit as st
@@ -20,38 +21,33 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# --- CONFIGURAÇÃO DO BANCO DE DADOS SQLITE ---
+# --- CONFIGURAÇÃO DA CONEXÃO COM GOOGLE SHEETS ---
 
 
-def init_db():
-  conn = sqlite3.connect("fluxo_claro.db")
-  cursor = conn.cursor()
-  cursor.execute("""
-        CREATE TABLE IF NOT EXISTS financas_mensais (
-            mes TEXT,
-            grupo TEXT,
-            categoria TEXT,
-            valor REAL,
-            PRIMARY KEY (mes, grupo, categoria)
-        )
-    """)
-  conn.commit()
-  conn.close()
+@st.cache_resource
+def conectar_google_sheets():
+  try:
+    # Obtém as credenciais armazenadas de forma segura nos segredos do Streamlit
+    scope = [
+        "https://spreadsheets.google.com/feeds",
+        "https://www.googleapis.com/auth/drive",
+    ]
+    credentials_dict = dict(st.secrets["gcp_service_account"])
+    creds = ServiceAccountCredentials.from_json_keyfile_dict(
+        credentials_dict, scope
+    )
+    client = gspread.authorize(creds)
+    # Abre a planilha pelo nome ou ID configurado nos segredos
+    sheet_name = st.secrets.get("sheet_name", "FluxoClaro_DB")
+    spreadsheet = client.open(sheet_name)
+    worksheet = spreadsheet.get_worksheet(0)
+    return worksheet
+  except Exception as e:
+    return None
 
 
-init_db()
-
-
-def carregar_dados_mes(mes):
-  conn = sqlite3.connect("fluxo_claro.db")
-  cursor = conn.cursor()
-  cursor.execute(
-      "SELECT grupo, categoria, valor FROM financas_mensais WHERE mes = ?",
-      (mes,),
-  )
-  rows = cursor.fetchall()
-  conn.close()
-
+def carregar_dados_gsheets(mes):
+  worksheet = conectar_google_sheets()
   ent = {
       "Salário Líquido (Pessoa 01)": 0.0,
       "Salário Líquido (Pessoa 02)": 0.0,
@@ -93,42 +89,70 @@ def carregar_dados_mes(mes):
       "Outras Despesas: Presentes e Diversos": 0.0,
   }
 
-  for grupo, cat, val in rows:
-    if grupo == "entradas":
-      ent[cat] = val
-    elif grupo == "essenciais":
-      ess[cat] = val
-    elif grupo == "nao_essenciais":
-      ness[cat] = val
+  if worksheet is None:
+    return ent, ess, ness
+
+  try:
+    dados = worksheet.get_all_records()
+    for row in dados:
+      if str(row.get("mes")) == str(mes):
+        grupo = str(row.get("grupo"))
+        cat = str(row.get("categoria"))
+        val = float(row.get("valor", 0.0))
+        if grupo == "entradas" and cat in ent:
+          ent[cat] = val
+        elif grupo == "essenciais" and cat in ess:
+          ess[cat] = val
+        elif grupo == "nao_essenciais" and cat in ness:
+          ness[cat] = val
+  except Exception:
+    pass
+
   return ent, ess, ness
 
 
-def salvar_dados_mes(mes, ent, ess, ness):
-  conn = sqlite3.connect("fluxo_claro.db")
-  cursor = conn.cursor()
-  for k, v in ent.items():
-    cursor.execute(
-        """INSERT OR REPLACE INTO financas_mensais (mes, grupo, categoria, valor) 
-               VALUES (?, 'entradas', ?, ?)""",
-        (mes, k, float(v)),
-    )
-  for k, v in ess.items():
-    cursor.execute(
-        """INSERT OR REPLACE INTO financas_mensais (mes, grupo, categoria, valor) 
-               VALUES (?, 'essenciais', ?, ?)""",
-        (mes, k, float(v)),
-    )
-  for k, v in ness.items():
-    cursor.execute(
-        """INSERT OR REPLACE INTO financas_mensais (mes, grupo, categoria, valor) 
-               VALUES (?, 'nao_essenciais', ?, ?)""",
-        (mes, k, float(v)),
-    )
-  conn.commit()
-  conn.close()
+def salvar_dados_gsheets(mes, ent, ess, ness):
+  worksheet = conectar_google_sheets()
+  if worksheet is None:
+    return
+
+  try:
+    dados_atuais = worksheet.get_all_records()
+    # Remove registos antigos do mês atual para reescrever limpo
+    novos_dados = [
+        row for row in dados_atuais if str(row.get("mes")) != str(mes)
+    ]
+
+    for k, v in ent.items():
+      novos_dados.append(
+          {"mes": mes, "grupo": "entradas", "categoria": k, "valor": float(v)}
+      )
+    for k, v in ess.items():
+      novos_dados.append(
+          {"mes": mes, "grupo": "essenciais", "categoria": k, "valor": float(v)}
+      )
+    for k, v in ness.items():
+      novos_dados.append(
+          {
+              "mes": mes,
+              "grupo": "nao_essenciais",
+              "categoria": k,
+              "valor": float(v),
+          }
+      )
+
+    # Reconstrói a folha de cálculo
+    worksheet.clear()
+    worksheet.append_row(["mes", "grupo", "categoria", "valor"])
+    for row in novos_dados:
+      worksheet.append_row(
+          [row["mes"], row["grupo"], row["categoria"], row["valor"]]
+      )
+  except Exception as e:
+    st.error(f"Erro ao salvar no Google Sheets: {e}")
 
 
-# CSS com Tipografia Poppins Black / ExtraBold e Paleta Sempre Clara
+# CSS com Tipografia Poppins e Paleta Sempre Clara
 st.markdown(
     """
 <style>
@@ -194,7 +218,7 @@ with st.sidebar:
       index=10,
   )
 
-  ent_banco, ess_banco, ness_banco = carregar_dados_mes(mes_referencia)
+  ent_banco, ess_banco, ness_banco = carregar_dados_gsheets(mes_referencia)
 
   if (
       "mes_ativo" not in st.session_state
@@ -264,14 +288,6 @@ with st.sidebar:
       else st.session_state.nao_essenciais
   )
 
-  grupo_key = (
-      "entradas"
-      if grupo_alvo.startswith("1")
-      else "essenciais"
-      if grupo_alvo.startswith("2")
-      else "nao_essenciais"
-  )
-
   if acao_cat == "Criar Nova Categoria":
     novo_nome = st.text_input("Nome da Nova Categoria")
     novo_valor = st.number_input(
@@ -280,7 +296,7 @@ with st.sidebar:
     if st.button("Adicionar Categoria", use_container_width=True):
       if novo_nome.strip():
         dict_alvo[novo_nome.strip()] = float(novo_valor)
-        salvar_dados_mes(
+        salvar_dados_gsheets(
             mes_referencia,
             st.session_state.entradas,
             st.session_state.essenciais,
@@ -294,19 +310,9 @@ with st.sidebar:
       cat_nova = st.text_input("Novo Nome", value=cat_antiga)
       if st.button("Salvar Novo Nome", use_container_width=True):
         if cat_nova.strip() and cat_nova.strip() != cat_antiga:
-          conn = sqlite3.connect("fluxo_claro.db")
-          cursor = conn.cursor()
-          cursor.execute(
-              "DELETE FROM financas_mensais WHERE mes = ? AND grupo = ? AND"
-              " categoria = ?",
-              (mes_referencia, grupo_key, cat_antiga),
-          )
-          conn.commit()
-          conn.close()
-
           valor_atual = dict_alvo.pop(cat_antiga)
           dict_alvo[cat_nova.strip()] = valor_atual
-          salvar_dados_mes(
+          salvar_dados_gsheets(
               mes_referencia,
               st.session_state.entradas,
               st.session_state.essenciais,
@@ -323,17 +329,7 @@ with st.sidebar:
           "Confirmar Exclusão", type="primary", use_container_width=True
       ):
         dict_alvo.pop(cat_excluir, None)
-        conn = sqlite3.connect("fluxo_claro.db")
-        cursor = conn.cursor()
-        cursor.execute(
-            "DELETE FROM financas_mensais WHERE mes = ? AND grupo = ? AND"
-            " categoria = ?",
-            (mes_referencia, grupo_key, cat_excluir),
-        )
-        conn.commit()
-        conn.close()
-
-        salvar_dados_mes(
+        salvar_dados_gsheets(
             mes_referencia,
             st.session_state.entradas,
             st.session_state.essenciais,
@@ -450,9 +446,9 @@ with aba_planilha:
         f" {format_brl(sum(st.session_state.nao_essenciais.values()))}"
     )
 
-  # Salva automaticamente e instantaneamente no banco de dados se houver alteração
+  # Salva automaticamente no Google Sheets se houver alteração
   if dados_alterados:
-    salvar_dados_mes(
+    salvar_dados_gsheets(
         mes_referencia,
         st.session_state.entradas,
         st.session_state.essenciais,

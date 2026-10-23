@@ -94,11 +94,11 @@ def carregar_dados_mes(mes):
   }
 
   for grupo, cat, val in rows:
-    if grupo == "entradas" and cat in ent:
+    if grupo == "entradas":
       ent[cat] = val
-    elif grupo == "essenciais" and cat in ess:
+    elif grupo == "essenciais":
       ess[cat] = val
-    elif grupo == "nao_essenciais" and cat in ness:
+    elif grupo == "nao_essenciais":
       ness[cat] = val
   return ent, ess, ness
 
@@ -265,6 +265,14 @@ with st.sidebar:
       else st.session_state.nao_essenciais
   )
 
+  grupo_key = (
+      "entradas"
+      if grupo_alvo.startswith("1")
+      else "essenciais"
+      if grupo_alvo.startswith("2")
+      else "nao_essenciais"
+  )
+
   if acao_cat == "Criar Nova Categoria":
     novo_nome = st.text_input("Nome da Nova Categoria")
     novo_valor = st.number_input(
@@ -287,6 +295,17 @@ with st.sidebar:
       cat_nova = st.text_input("Novo Nome", value=cat_antiga)
       if st.button("Salvar Novo Nome", use_container_width=True):
         if cat_nova.strip() and cat_nova.strip() != cat_antiga:
+          # Remove antiga do DB
+          conn = sqlite3.connect("fluxo_claro.db")
+          cursor = conn.cursor()
+          cursor.execute(
+              "DELETE FROM financas_mensais WHERE mes = ? AND grupo = ? AND"
+              " categoria = ?",
+              (mes_referencia, grupo_key, cat_antiga),
+          )
+          conn.commit()
+          conn.close()
+
           valor_atual = dict_alvo.pop(cat_antiga)
           dict_alvo[cat_nova.strip()] = valor_atual
           salvar_dados_mes(
@@ -306,6 +325,17 @@ with st.sidebar:
           "Confirmar Exclusão", type="primary", use_container_width=True
       ):
         dict_alvo.pop(cat_excluir, None)
+        # Apaga permanentemente do banco de dados SQLite
+        conn = sqlite3.connect("fluxo_claro.db")
+        cursor = conn.cursor()
+        cursor.execute(
+            "DELETE FROM financas_mensais WHERE mes = ? AND grupo = ? AND"
+            " categoria = ?",
+            (mes_referencia, grupo_key, cat_excluir),
+        )
+        conn.commit()
+        conn.close()
+
         salvar_dados_mes(
             mes_referencia,
             st.session_state.entradas,
@@ -366,7 +396,6 @@ aba_planilha, aba_graficos, aba_metas = st.tabs([
 ])
 
 with aba_planilha:
-  # Botão de Salvamento Rápido no topo da planilha
   col_btn1, col_btn2 = st.columns([4, 1])
   with col_btn2:
     if st.button("💾 Salvar Alterações", use_container_width=True, type="primary"):
@@ -425,7 +454,7 @@ with aba_planilha:
         f" {format_brl(sum(st.session_state.nao_essenciais.values()))}"
     )
 
-  # Salvar automaticamente a cada alteração nos inputs
+  # Salvar automaticamente a cada alteração
   salvar_dados_mes(
       mes_referencia,
       st.session_state.entradas,

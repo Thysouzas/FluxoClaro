@@ -401,11 +401,16 @@ pct_ness = (
 )
 pct_sobra = (sobra_mensal / total_entradas * 100) if total_entradas > 0 else 0.0
 
-# Cabeçalho e Indicadores no Topo (6 Colunas)
+# Cabeçalho e Indicadores no Topo (6 Colunas com alturas iguais)
 st.title(f"FluxoClaro — Painel Gerencial ({mes_referencia})")
 
 c1, c2, c3, c4, c5, c6 = st.columns(6)
-c1.metric("1. Total de Entradas", format_brl(total_entradas))
+c1.metric(
+    "1. Total de Entradas",
+    format_brl(total_entradas),
+    delta="Receita registrada",
+    delta_color="off",
+)
 c2.metric(
     "2. Despesas Essenciais",
     format_brl(total_essenciais),

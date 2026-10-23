@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Painel Gerencial de Controle Financeiro Pessoal — FluxoClaro (Com Servidor GitHub)
+Painel Gerencial de Controle Financeiro Pessoal — FluxoClaro (Com Servidor GitHub & Histórico Mensal)
 Identidade Visual Oficial:
 - Cores Principais: #001089, #9918ed, #6e1aac
 - Variação de Cores (Fundo Sempre Claro): #e8e9f9, #b9c2f9, #dfd3ea, #e9e8ea
@@ -130,89 +130,67 @@ def format_brl(valor: float) -> str:
   return f"R$ {valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
 
-# Carregar dados salvos na nuvem ao iniciar
-dados_nuvem = carregar_da_nuvem()
+def get_default_mes():
+  return {
+      "entradas": {
+          "Salário Líquido (Pessoa 01)": 0.0,
+          "Salário Líquido (Pessoa 02)": 0.0,
+          "Vale-Alimentação (VA)": 0.0,
+          "Vale-Refeição (VR)": 0.0,
+          "Outras Entradas: Uber / Apps / Freelance": 0.0,
+          "Outras Entradas: Comissões / Bônus": 0.0,
+          "Outras Entradas: Aluguel / Dividendos": 0.0,
+      },
+      "essenciais": {
+          "Moradia (Financiamento / Aluguel)": 0.0,
+          "Condomínio": 0.0,
+          "Supermercado": 0.0,
+          "Água e Saneamento": 0.0,
+          "Luz (Energia Elétrica)": 0.0,
+          "Gás (Encanado / Botijão)": 0.0,
+          "IPTU": 0.0,
+          "Plano de Saúde": 0.0,
+          "MEI (DAS)": 0.0,
+          "Investimentos Obrigatórios": 0.0,
+          "Faculdade / Educação": 0.0,
+      },
+      "nao_essenciais": {
+          "Cartão de Crédito PF": 0.0,
+          "Cartão de Crédito PJ": 0.0,
+          "Farmácia": 0.0,
+          "Gastos com Animais (Pet)": 0.0,
+          "Imprevistos": 0.0,
+          "Transporte (Ônibus / Trem / Uber)": 0.0,
+          "Veículo (Seguro / IPVA / Manutenção)": 0.0,
+          "Combustível": 0.0,
+          "Internet Residencial": 0.0,
+          "Streaming (Netflix / Amazon / Spotify)": 0.0,
+          "Padaria / Feira": 0.0,
+          "Lazer / Cinema / Restaurantes": 0.0,
+          "Salão / Manicure / Barbearia": 0.0,
+          "Tarifas Bancárias": 0.0,
+          "Telefonia Móvel": 0.0,
+          "Outras Despesas: Presentes e Diversos": 0.0,
+      },
+  }
 
-if "entradas" not in st.session_state:
-  if dados_nuvem and "entradas" in dados_nuvem:
-    st.session_state.entradas = dados_nuvem["entradas"]
-  else:
-    st.session_state.entradas = {
-        "Salário Líquido (Pessoa 01)": 0.0,
-        "Salário Líquido (Pessoa 02)": 0.0,
-        "Vale-Alimentação (VA)": 0.0,
-        "Vale-Refeição (VR)": 0.0,
-        "Outras Entradas: Uber / Apps / Freelance": 0.0,
-        "Outras Entradas: Comissões / Bônus": 0.0,
-        "Outras Entradas: Aluguel / Dividendos": 0.0,
-    }
 
-if "essenciais" not in st.session_state:
-  if dados_nuvem and "essenciais" in dados_nuvem:
-    st.session_state.essenciais = dados_nuvem["essenciais"]
-  else:
-    st.session_state.essenciais = {
-        "Moradia (Financiamento / Aluguel)": 0.0,
-        "Condomínio": 0.0,
-        "Supermercado": 0.0,
-        "Água e Saneamento": 0.0,
-        "Luz (Energia Elétrica)": 0.0,
-        "Gás (Encanado / Botijão)": 0.0,
-        "IPTU": 0.0,
-        "Plano de Saúde": 0.0,
-        "MEI (DAS)": 0.0,
-        "Investimentos Obrigatórios": 0.0,
-        "Faculdade / Educação": 0.0,
-    }
-
-if "nao_essenciais" not in st.session_state:
-  if dados_nuvem and "nao_essenciais" in dados_nuvem:
-    st.session_state.nao_essenciais = dados_nuvem["nao_essenciais"]
-  else:
-    st.session_state.nao_essenciais = {
-        "Cartão de Crédito PF": 0.0,
-        "Cartão de Crédito PJ": 0.0,
-        "Farmácia": 0.0,
-        "Gastos com Animais (Pet)": 0.0,
-        "Imprevistos": 0.0,
-        "Transporte (Ônibus / Trem / Uber)": 0.0,
-        "Veículo (Seguro / IPVA / Manutenção)": 0.0,
-        "Combustível": 0.0,
-        "Internet Residencial": 0.0,
-        "Streaming (Netflix / Amazon / Spotify)": 0.0,
-        "Padaria / Feira": 0.0,
-        "Lazer / Cinema / Restaurantes": 0.0,
-        "Salão / Manicure / Barbearia": 0.0,
-        "Tarifas Bancárias": 0.0,
-        "Telefonia Móvel": 0.0,
-        "Outras Despesas: Presentes e Diversos": 0.0,
-    }
+# Inicialização dos dados globais da nuvem
+if "dados_meses" not in st.session_state:
+  nuvem = carregar_da_nuvem()
+  st.session_state.dados_meses = (
+      nuvem if nuvem and isinstance(nuvem, dict) else {}
+  )
 
 if "metas_economia" not in st.session_state:
-  st.session_state.metas_economia = [
-      {
-          "titulo": "Meta de Gasto com Lazer / Cinema",
-          "categoria": "Lazer / Cinema / Restaurantes",
-          "meta": 500.0,
-      },
-      {
-          "titulo": "Teto do Cartão de Crédito PF",
-          "categoria": "Cartão de Crédito PF",
-          "meta": 1000.0,
-      },
-      {
-          "titulo": "Orçamento de Supermercado",
-          "categoria": "Supermercado",
-          "meta": 1500.0,
-      },
-      {
-          "titulo": "Economia Mensal Livre p/ Viagem e Lazer Futuro",
-          "categoria": "SOBRA_MENSAL",
-          "meta": 500.0,
-      },
-  ]
+  # Tenta recuperar metas do primeiro mês disponível ou deixa vazio
+  st.session_state.metas_economia = []
+  for m_data in st.session_state.dados_meses.values():
+    if isinstance(m_data, dict) and "metas_economia" in m_data:
+      st.session_state.metas_economia = m_data["metas_economia"]
+      break
 
-# Barra Lateral: Configurações, Reserva e Botão de Servidor
+# Barra Lateral: Configurações & Mês de Referência
 with st.sidebar:
   st.header("Configurações & Servidor")
   mes_referencia = st.selectbox(
@@ -234,6 +212,20 @@ with st.sidebar:
       index=10,
   )
 
+  # Sincroniza o mês selecionado com o session_state
+  if (
+      "mes_atual_ativo" not in st.session_state
+      or st.session_state.mes_atual_ativo != mes_referencia
+  ):
+    if mes_referencia not in st.session_state.dados_meses:
+      st.session_state.dados_meses[mes_referencia] = get_default_mes()
+
+    m_atual = st.session_state.dados_meses[mes_referencia]
+    st.session_state.entradas = m_atual.get("entradas", get_default_mes()["entradas"]).copy()
+    st.session_state.essenciais = m_atual.get("essenciais", get_default_mes()["essenciais"]).copy()
+    st.session_state.nao_essenciais = m_atual.get("nao_essenciais", get_default_mes()["nao_essenciais"]).copy()
+    st.session_state.mes_atual_ativo = mes_referencia
+
   st.divider()
   st.subheader("☁️ Servidor na Nuvem")
   if st.button(
@@ -241,12 +233,14 @@ with st.sidebar:
       use_container_width=True,
       type="primary",
   ):
-    pacote_dados = {
+    # Atualiza o mês atual no dicionário global
+    st.session_state.dados_meses[mes_referencia] = {
         "entradas": st.session_state.entradas,
         "essenciais": st.session_state.essenciais,
         "nao_essenciais": st.session_state.nao_essenciais,
+        "metas_economia": st.session_state.metas_economia,
     }
-    sucesso = salvar_na_nuvem(pacote_dados)
+    sucesso = salvar_na_nuvem(st.session_state.dados_meses)
     if sucesso:
       st.success("Dados salvos com sucesso no servidor!")
     else:
@@ -318,7 +312,7 @@ with st.sidebar:
         dict_alvo.pop(cat_excluir, None)
         st.rerun()
 
-# Cálculos Automáticos Globais
+# Cálculos Automáticos Globais do Mês Ativo
 total_entradas = sum(st.session_state.entradas.values())
 total_essenciais = sum(st.session_state.essenciais.values())
 total_nao_essenciais = sum(st.session_state.nao_essenciais.values())
@@ -365,7 +359,7 @@ st.divider()
 
 aba_planilha, aba_graficos, aba_metas = st.tabs([
     "📋 Planilha de Entradas e Despesas",
-    "📊 Gráficos Interativos (Barras e Pizza)",
+    "📊 Evolução & Comparações Mensais",
     "🎯 Metas de Economia",
 ])
 
@@ -405,132 +399,118 @@ with aba_planilha:
     )
 
 with aba_graficos:
-  st.subheader(
-      "1. Gráfico de Barras Interativo: Categorias de Entradas vs. Despesas"
-  )
-  dados_barras = (
-      [
-          {"Categoria": k, "Valor": v, "Tipo": "1. Entradas"}
-          for k, v in st.session_state.entradas.items()
-          if v > 0
-      ]
-      + [
-          {"Categoria": k, "Valor": v, "Tipo": "2. Despesas Essenciais"}
-          for k, v in st.session_state.essenciais.items()
-          if v > 0
-      ]
-      + [
-          {"Categoria": k, "Valor": v, "Tipo": "3. Despesas Não Essenciais"}
-          for k, v in st.session_state.nao_essenciais.items()
-          if v > 0
-      ]
-  )
-  if dados_barras:
-    df_barras = pd.DataFrame(dados_barras).sort_values(
-        by="Valor", ascending=True
-    )
-    fig_barras = px.bar(
-        df_barras,
-        x="Valor",
-        y="Categoria",
-        color="Tipo",
-        orientation="h",
+  st.subheader("1. Evolução em Coluna Mensal (Entradas vs Despesas)")
+
+  # Constrói o histórico baseado nos meses salvos em st.session_state.dados_meses
+  # Garante que o mês atual ativo também reflita os valores correntes da tela
+  st.session_state.dados_meses[mes_referencia] = {
+      "entradas": st.session_state.entradas,
+      "essenciais": st.session_state.essenciais,
+      "nao_essenciais": st.session_state.nao_essenciais,
+  }
+
+  historico_data = []
+  ordem_meses = [
+      "Janeiro 2026",
+      "Fevereiro 2026",
+      "Março 2026",
+      "Abril 2026",
+      "Maio 2026",
+      "Junho 2026",
+      "Julho 2026",
+      "Agosto 2026",
+      "Setembro 2026",
+      "Outubro 2026",
+      "Novembro 2026",
+      "Dezembro 2026",
+  ]
+
+  for m in ordem_meses:
+    if m in st.session_state.dados_meses:
+      d = st.session_state.dados_meses[m]
+      t_ent = sum(d.get("entradas", {}).values())
+      t_ess = sum(d.get("essenciais", {}).values())
+      t_ness = sum(d.get("nao_essenciais", {}).values())
+      sobra = t_ent - (t_ess + t_ness)
+
+      # Adiciona colunas para gráfico agrupado
+      historico_data.append(
+          {"Mês": m, "Categoria": "Entradas", "Valor": t_ent}
+      )
+      historico_data.append(
+          {"Mês": m, "Categoria": "Despesas Essenciais", "Valor": t_ess}
+      )
+      historico_data.append(
+          {"Mês": m, "Categoria": "Despesas Não Essenciais", "Valor": t_ness}
+      )
+
+  df_hist = pd.DataFrame(historico_data)
+
+  if not df_hist.empty:
+    fig_colunas = px.bar(
+        df_hist,
+        x="Mês",
+        y="Valor",
+        color="Categoria",
+        barmode="group",
         text_auto=".2f",
         color_discrete_map={
-            "1. Entradas": "#001089",
-            "2. Despesas Essenciais": "#6e1aac",
-            "3. Despesas Não Essenciais": "#9918ed",
-        },
-    )
-    fig_barras.update_layout(
-        paper_bgcolor="#FFFFFF", plot_bgcolor="#FFFFFF", font_color="#001089"
-    )
-    st.plotly_chart(fig_barras, use_container_width=True)
-
-  st.divider()
-  st.subheader(
-      "2. Gráficos de Pizza: Distribuição das Despesas Essenciais e Não"
-      " Essenciais"
-  )
-  p_col1, p_col2, p_col3 = st.columns(3)
-
-  with p_col1:
-    df_macro = pd.DataFrame({
-        "Grupo": ["Despesas Essenciais", "Despesas Não Essenciais"],
-        "Valor": [total_essenciais, total_nao_essenciais],
-    })
-    fig_p1 = px.pie(
-        df_macro,
-        names="Grupo",
-        values="Valor",
-        hole=0.45,
-        title="Proporção Geral de Despesas",
-        color="Grupo",
-        color_discrete_map={
-            "Despesas Essenciais": "#001089",
+            "Entradas": "#001089",
+            "Despesas Essenciais": "#6e1aac",
             "Despesas Não Essenciais": "#9918ed",
         },
+        title="Comparativo Mensal de Entradas e Despesas",
     )
-    fig_p1.update_layout(paper_bgcolor="#FFFFFF", font_color="#001089")
-    st.plotly_chart(fig_p1, use_container_width=True)
+    fig_colunas.update_layout(
+        paper_bgcolor="#FFFFFF", plot_bgcolor="#FFFFFF", font_color="#001089"
+    )
+    st.plotly_chart(fig_colunas, use_container_width=True)
 
-  with p_col2:
-    df_ess = pd.DataFrame([
-        {"Item": k, "Valor": v}
-        for k, v in st.session_state.essenciais.items()
-        if v > 0
-    ])
-    if not df_ess.empty:
-      fig_p2 = px.pie(
-          df_ess,
-          names="Item",
-          values="Valor",
-          hole=0.45,
-          title="Detalhamento: Despesas Essenciais",
-          color_discrete_sequence=[
-              "#001089",
-              "#6e1aac",
-              "#9918ed",
-              "#b9c2f9",
-              "#dfd3ea",
-          ],
-      )
-      fig_p2.update_layout(paper_bgcolor="#FFFFFF", font_color="#001089")
-      st.plotly_chart(fig_p2, use_container_width=True)
+  st.divider()
+  st.subheader("2. Comparação da Sobra Mensal ao Longo do Tempo")
 
-  with p_col3:
-    df_ness = pd.DataFrame([
-        {"Item": k, "Valor": v}
-        for k, v in st.session_state.nao_essenciais.items()
-        if v > 0
-    ])
-    if not df_ness.empty:
-      fig_p3 = px.pie(
-          df_ness,
-          names="Item",
-          values="Valor",
-          hole=0.45,
-          title="Detalhamento: Não Essenciais",
-          color_discrete_sequence=[
-              "#9918ed",
-              "#6e1aac",
-              "#001089",
-              "#b9c2f9",
-              "#dfd3ea",
-          ],
+  sobra_data = []
+  for m in ordem_meses:
+    if m in st.session_state.dados_meses:
+      d = st.session_state.dados_meses[m]
+      t_ent = sum(d.get("entradas", {}).values())
+      t_esp = sum(d.get("essenciais", {}).values()) + sum(
+          d.get("nao_essenciais", {}).values()
       )
-      fig_p3.update_layout(paper_bgcolor="#FFFFFF", font_color="#001089")
-      st.plotly_chart(fig_p3, use_container_width=True)
+      sobra_val = t_ent - t_esp
+      if t_ent > 0 or t_esp > 0:
+        sobra_data.append({"Mês": m, "Sobra Mensal": sobra_val})
+
+  df_sobra = pd.DataFrame(sobra_data)
+  if not df_sobra.empty:
+    fig_sobra = px.bar(
+        df_sobra,
+        x="Mês",
+        y="Sobra Mensal",
+        text_auto=".2f",
+        color="Sobra Mensal",
+        color_continuous_scale=["#9918ed", "#001089"],
+        title="Evolução da Sobra Financeira Mensal",
+    )
+    fig_sobra.update_layout(
+        paper_bgcolor="#FFFFFF", plot_bgcolor="#FFFFFF", font_color="#001089"
+    )
+    st.plotly_chart(fig_sobra, use_container_width=True)
+  else:
+    st.info(
+        "Preencha os valores na planilha e clique em 'Salvar / Confirmar na"
+        " Nuvem' para visualizar o histórico temporal."
+    )
 
 with aba_metas:
-  st.subheader("Metas de Economia Mensal vs. Gastos Reais")
+  st.subheader("Minhas Metas de Economia")
   todas_categorias_despesa = {
       **st.session_state.essenciais,
       **st.session_state.nao_essenciais,
   }
 
   with st.expander("➕ Adicionar Nova Meta de Economia"):
-    m_titulo = st.text_input("Descrição da Meta (ex: Economizar em Lazer)")
+    m_titulo = st.text_input("Descrição da Meta (ex: Viagem em Família)")
     m_cat = st.selectbox(
         "Categoria Vinculada",
         ["SOBRA_MENSAL"] + list(todas_categorias_despesa.keys()),
@@ -544,19 +524,39 @@ with aba_metas:
           "categoria": m_cat,
           "meta": float(m_valor),
       })
+      st.success(
+          "Meta adicionada! Lembre-se de clicar em 'Salvar na Nuvem' para"
+          " gravar."
+      )
       st.rerun()
 
-  for idx, meta in enumerate(list(st.session_state.metas_economia)):
-    cat = meta["categoria"]
-    alvo = meta["meta"]
-    real = (
-        max(0.0, sobra_mensal)
-        if cat == "SOBRA_MENSAL"
-        else todas_categorias_despesa.get(cat, 0.0)
+  if not st.session_state.metas_economia:
+    st.info(
+        "Ainda não tem nenhuma meta cadastrada. Use o botão acima para criar"
+        " a sua primeira meta!"
     )
-    pct = min(1.0, real / alvo) if alvo > 0 else 0.0
-    st.markdown(
-        f"**{meta['titulo']}** — Atual: {format_brl(real)} / Meta:"
-        f" {format_brl(alvo)}"
-    )
-    st.progress(pct)
+  else:
+    st.divider()
+    for idx, meta in enumerate(list(st.session_state.metas_economia)):
+      cat = meta["categoria"]
+      alvo = meta["meta"]
+      real = (
+          max(0.0, sobra_mensal)
+          if cat == "SOBRA_MENSAL"
+          else todas_categorias_despesa.get(cat, 0.0)
+      )
+      pct = min(1.0, real / alvo) if alvo > 0 else 0.0
+
+      col_m1, col_m2 = st.columns([5, 1])
+      with col_m1:
+        st.markdown(
+            f"**{meta['titulo']}** — Atual: {format_brl(real)} / Meta:"
+            f" {format_brl(alvo)}"
+        )
+        st.progress(pct)
+      with col_m2:
+        st.write("")
+        if st.button("🗑️ Excluir", key=f"del_meta_{idx}"):
+          st.session_state.metas_economia.pop(idx)
+          st.success("Meta excluída. Clique em 'Salvar na Nuvem' para atualizar.")
+          st.rerun()

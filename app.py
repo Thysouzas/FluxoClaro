@@ -1,635 +1,187 @@
 # -*- coding: utf-8 -*-
 """
-Painel Gerencial de Controle Financeiro Pessoal — FluxoClaro (Com Servidor GitHub & Saldo Acumulado)
-Identidade Visual Oficial:
-- Cores Principais: #001089, #9918ed, #6e1aac
-- Variação de Cores (Fundo Sempre Claro): #e8e9f9, #b9c2f9, #dfd3ea, #e9e8ea
-- Tipografia: Poppins Black (Títulos) e Poppins ExtraBold (Subtítulos)
+Tema visual do FluxoClaro.
+Paleta oficial: #001089, #9918ed, #6e1aac | fundos claros: #e8e9f9, #b9c2f9, #dfd3ea, #e9e8ea
+Assinatura visual: cantos arredondados com o canto inferior esquerdo "mordido" (pequeno),
+sombras tingidas de azul/roxo e uma faixa de cor no topo de cada cartão.
 """
 
-import base64
-import json
-import requests
-import pandas as pd
-import plotly.express as px
 import streamlit as st
 
-st.set_page_config(
-    page_title="FluxoClaro — Painel Gerencial Financeiro",
-    page_icon="📊",
-    layout="wide",
-    initial_sidebar_state="expanded",
-)
-
-# --- CONFIGURAÇÃO DO SERVIDOR GITHUB (VIA SECRETS) ---
-REPO_NAME = st.secrets.get("REPO_NAME", "Thysouzas/FluxoClaro")
-ARQUIVO_DADOS = "dados_fluxo.json"
-
-
-def obter_token():
-    try:
-        return st.secrets["GITHUB_TOKEN"]
-    except Exception:
-        return None
-
-
-def carregar_da_nuvem():
-    token = obter_token()
-    if not token:
-        return None
-
-    url = f"https://api.github.com/repos/{REPO_NAME}/contents/{ARQUIVO_DADOS}"
-    headers = {
-        "Authorization": f"token {token}",
-        "Accept": "application/vnd.github.v3+json",
-    }
-
-    try:
-        r = requests.get(url, headers=headers)
-        if r.status_code == 200:
-            content_encoded = r.json().get("content")
-            decoded = base64.b64decode(content_encoded).decode("utf-8")
-            return json.loads(decoded)
-    except Exception:
-        pass
-    return None
-
-
-def salvar_na_nuvem(dados_dict):
-    token = obter_token()
-    if not token:
-        st.error("Token do GitHub não configurado nos Secrets do Streamlit!")
-        return False
-
-    url = f"https://api.github.com/repos/{REPO_NAME}/contents/{ARQUIVO_DADOS}"
-    headers = {
-        "Authorization": f"token {token}",
-        "Accept": "application/vnd.github.v3+json",
-    }
-
-    r = requests.get(url, headers=headers)
-    sha = r.json().get("sha") if r.status_code == 200 else None
-
-    conteudo_str = json.dumps(dados_dict, ensure_ascii=False, indent=4)
-    conteudo_base64 = base64.b64encode(conteudo_str.encode("utf-8")).decode("utf-8")
-
-    payload = {
-        "message": "Atualização de dados financeiros via FluxoClaro",
-        "content": conteudo_base64,
-    }
-    if sha:
-        payload["sha"] = sha
-
-    resp = requests.put(url, headers=headers, json=payload)
-    return resp.status_code in [200, 201]
-
-
-# CSS com Sidebar Flutuante, Tipografia Poppins e Paleta Sempre Clara
-st.markdown(
-    """
-<style>
-    @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800;900&display=swap');
-    
-    html, body, [class*="css"] {
-        font-family: 'Poppins', sans-serif;
-        background-color: #F6F7FD;
-        color: #001089;
-    }
-    
-    .stApp {
-        background-color: #F6F7FD;
-        color: #001089;
-    }
-
-    /* ESTILO DA BARRA LATERAL FLUTUANTE E ELEGANTE */
-    [data-testid="stSidebar"] {
-        background-color: #FFFFFF !important;
-        border-right: none !important;
-        box-shadow: 6px 0px 30px rgba(0, 16, 137, 0.06);
-        padding-top: 1rem;
-    }
-
-    [data-testid="stSidebar"] > div:first-child {
-        padding-left: 1.2rem;
-        padding-right: 1.2rem;
-    }
-
-    h1 {
-        font-family: 'Poppins', sans-serif !important;
-        font-weight: 900 !important;
-        color: #001089 !important;
-    }
-    
-    h2, h3, h4 {
-        font-family: 'Poppins', sans-serif !important;
-        font-weight: 800 !important;
-        color: #001089 !important;
-    }
-    
-    div[data-testid="stMetric"] {
-        background-color: #FFFFFF;
-        border: 1px solid #b9c2f9;
-        border-radius: 12px;
-        padding: 16px 20px;
-        box-shadow: 0 4px 12px rgba(0, 16, 137, 0.03);
-    }
-    
-    div[data-testid="stMetricValue"] {
-        color: #001089 !important;
-        font-weight: 800 !important;
-    }
-</style>
-""",
-    unsafe_allow_html=True,
-)
-
-
-def format_brl(valor: float) -> str:
-    return f"R$ {valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-
-
-def get_default_mes():
-    return {
-        "entradas": {
-            "Aluguel": 0.0,
-            "Salario": 0.0,
-            "Outros": 0.0,
-        },
-        "essenciais": {
-            "Faculdade": 0.0,
-            "MEI (DAS)": 0.0,
-            "Plano Celular (TIM)": 0.0,
-            "Internet (Ligga)": 0.0,
-            "Energia (Copel)": 0.0,
-            "Cond. R. Redzimski": 0.0,
-            "Cond. R. Eduarda Sprada": 0.0,
-            "IPTU": 0.0,
-        },
-        "nao_essenciais": {
-            "Cartão de Crédito PF": 0.0,
-            "Cartão de Crédito PJ": 0.0,
-            "Outras Despesas: Presentes e Diversos": 0.0,
-            "Imprevistos": 0.0,
-        },
-    }
-
-
-meses_nomes = [
-    "Janeiro",
-    "Fevereiro",
-    "Março",
-    "Abril",
-    "Maio",
-    "Junho",
-    "Julho",
-    "Agosto",
-    "Setembro",
-    "Outubro",
-    "Novembro",
-    "Dezembro",
-]
-anos_disponiveis = ["2026", "2027"]
-
-ordem_meses = [f"{m} {a}" for a in anos_disponiveis for m in meses_nomes]
-
-# Inicialização dos dados globais da nuvem
-if "dados_meses" not in st.session_state:
-    nuvem = carregar_da_nuvem()
-    if nuvem and isinstance(nuvem, dict):
-        st.session_state.dados_meses = nuvem
-        if "meta_reserva_alvo" in nuvem:
-            st.session_state.meta_reserva_alvo = float(nuvem["meta_reserva_alvo"])
-        if "saldo_atual_reserva" in nuvem:
-            st.session_state.saldo_atual_reserva = float(nuvem["saldo_atual_reserva"])
-        if "metas_economia" in nuvem:
-            st.session_state.metas_economia = nuvem["metas_economia"]
-    else:
-        st.session_state.dados_meses = {}
-
-if "meta_reserva_alvo" not in st.session_state:
-    st.session_state.meta_reserva_alvo = 10000.0
-
-if "saldo_atual_reserva" not in st.session_state:
-    st.session_state.saldo_atual_reserva = 0.0
-
-if "metas_economia" not in st.session_state:
-    st.session_state.metas_economia = []
-    for m_data in st.session_state.dados_meses.values():
-        if isinstance(m_data, dict) and "metas_economia" in m_data:
-            st.session_state.metas_economia = m_data["metas_economia"]
-            break
-
-# Barra Lateral: Configurações & Filtros de Data Separados
-with st.sidebar:
-    st.header("Configurações & Servidor")
-    
-    col_a, col_m = st.columns(2)
-    with col_a:
-        ano_selecionado = st.selectbox("Ano", anos_disponiveis, index=0)
-    with col_m:
-        mes_selecionado = st.selectbox("Mês", meses_nomes, index=9)
-
-    mes_referencia = f"{mes_selecionado} {ano_selecionado}"
-
-    if (
-        "mes_atual_ativo" not in st.session_state
-        or st.session_state.mes_atual_ativo != mes_referencia
-    ):
-        if mes_referencia not in st.session_state.dados_meses:
-            st.session_state.dados_meses[mes_referencia] = get_default_mes()
-
-        m_atual = st.session_state.dados_meses[mes_referencia]
-        st.session_state.entradas = m_atual.get(
-            "entradas", get_default_mes()["entradas"]
-        ).copy()
-        st.session_state.essenciais = m_atual.get(
-            "essenciais", get_default_mes()["essenciais"]
-        ).copy()
-        st.session_state.nao_essenciais = m_atual.get(
-            "nao_essenciais", get_default_mes()["nao_essenciais"]
-        ).copy()
-
-        for k, v in st.session_state.entradas.items():
-            st.session_state[f"ent_{k}"] = float(v)
-        for k, v in st.session_state.essenciais.items():
-            st.session_state[f"ess_{k}"] = float(v)
-        for k, v in st.session_state.nao_essenciais.items():
-            st.session_state[f"ness_{k}"] = float(v)
-
-        st.session_state.mes_atual_ativo = mes_referencia
-
-    st.divider()
-    st.subheader("☁️ Servidor na Nuvem")
-    if st.button(
-        "💾 Salvar / Confirmar na Nuvem",
-        use_container_width=True,
-        type="primary",
-    ):
-        st.session_state.dados_meses[mes_referencia] = {
-            "entradas": st.session_state.entradas,
-            "essenciais": st.session_state.essenciais,
-            "nao_essenciais": st.session_state.nao_essenciais,
-        }
-        pacote_global = st.session_state.dados_meses.copy()
-        pacote_global["meta_reserva_alvo"] = st.session_state.meta_reserva_alvo
-        pacote_global["saldo_atual_reserva"] = st.session_state.saldo_atual_reserva
-        pacote_global["metas_economia"] = st.session_state.metas_economia
-
-        sucesso = salvar_na_nuvem(pacote_global)
-        if sucesso:
-            st.success("Dados salvos com sucesso no servidor!")
-        else:
-            st.error("Erro ao salvar. Verifique o token nos Secrets do Streamlit.")
-
-    st.divider()
-    st.subheader("🧹 Limpeza do Mês")
-    if st.button("🔄 Zerar Valores Deste Mês", use_container_width=True):
-        for k in st.session_state.entradas:
-            st.session_state.entradas[k] = 0.0
-            st.session_state[f"ent_{k}"] = 0.0
-        for k in st.session_state.essenciais:
-            st.session_state.essenciais[k] = 0.0
-            st.session_state[f"ess_{k}"] = 0.0
-        for k in st.session_state.nao_essenciais:
-            st.session_state.nao_essenciais[k] = 0.0
-            st.session_state[f"ness_{k}"] = 0.0
-
-        st.session_state.dados_meses[mes_referencia] = {
-            "entradas": st.session_state.entradas,
-            "essenciais": st.session_state.essenciais,
-            "nao_essenciais": st.session_state.nao_essenciais,
-        }
-        st.success(f"Valores de {mes_referencia} zerados com sucesso!")
-        st.rerun()
-
-    st.divider()
-    st.subheader("Reserva de Emergência")
-    st.session_state.meta_reserva_alvo = st.number_input(
-        "Valor Almejado da Reserva (R$)",
-        min_value=0.0,
-        value=float(st.session_state.meta_reserva_alvo),
-        step=500.0,
-    )
-    st.session_state.saldo_atual_reserva = st.number_input(
-        "Saldo Atual da Reserva (R$)",
-        min_value=0.0,
-        value=float(st.session_state.saldo_atual_reserva),
-        step=100.0,
-    )
-
-    st.divider()
-    st.subheader("Gerenciar Categorias")
-    acao_cat = st.selectbox(
-        "Ação",
-        ["Criar Nova Categoria", "Renomear Categoria", "Excluir Categoria"],
-    )
-    grupo_alvo = st.selectbox(
-        "Grupo",
-        [
-            "1. Outras Entradas",
-            "2. Despesas Essenciais",
-            "3. Outras Despesas (Não Essenciais)",
-        ],
-    )
-
-    dict_alvo = (
-        st.session_state.entradas
-        if grupo_alvo.startswith("1")
-        else st.session_state.essenciais
-        if grupo_alvo.startswith("2")
-        else st.session_state.nao_essenciais
-    )
-
-    if acao_cat == "Criar Nova Categoria":
-        novo_nome = st.text_input("Nome da Nova Categoria")
-        novo_valor = st.number_input(
-            "Valor Inicial (R$)", min_value=0.0, value=0.0, step=50.0
-        )
-        if st.button("Adicionar Categoria", use_container_width=True):
-            if novo_nome.strip():
-                dict_alvo[novo_nome.strip()] = float(novo_valor)
-                st.rerun()
-
-    elif acao_cat == "Renomear Categoria":
-        if dict_alvo:
-            cat_antiga = st.selectbox("Selecione a Categoria", list(dict_alvo.keys()))
-            cat_nova = st.text_input("Novo Nome", value=cat_antiga)
-            if st.button("Salvar Novo Nome", use_container_width=True):
-                if cat_nova.strip() and cat_nova.strip() != cat_antiga:
-                    valor_atual = dict_alvo.pop(cat_antiga)
-                    dict_alvo[cat_nova.strip()] = valor_atual
-                    st.rerun()
-
-    elif acao_cat == "Excluir Categoria":
-        if dict_alvo:
-            cat_excluir = st.selectbox(
-                "Categoria para Excluir", list(dict_alvo.keys())
-            )
-            if st.button(
-                "Confirmar Exclusão", type="primary", use_container_width=True
-            ):
-                dict_alvo.pop(cat_excluir, None)
-                st.rerun()
-
-st.session_state.dados_meses[mes_referencia] = {
-    "entradas": st.session_state.entradas,
-    "essenciais": st.session_state.essenciais,
-    "nao_essenciais": st.session_state.nao_essenciais,
+COR_MAPA = {
+    "Entradas": "#001089",
+    "Despesas Essenciais": "#9918ed",
+    "Despesas Não Essenciais": "#c9a4f2",
 }
 
-total_entradas = sum(st.session_state.entradas.values())
-total_essenciais = sum(st.session_state.essenciais.values())
-total_nao_essenciais = sum(st.session_state.nao_essenciais.values())
-total_despesas = total_essenciais + total_nao_essenciais
-sobra_mensal = total_entradas - total_despesas
+_CSS = """
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800;900&display=swap');
 
-try:
-    idx_atual = ordem_meses.index(mes_referencia)
-except ValueError:
-    idx_atual = 0
+:root{
+  --azul:#001089; --roxo:#9918ed; --roxo-esc:#6e1aac;
+  --lav:#e8e9f9; --peri:#b9c2f9; --lilas:#dfd3ea; --cinza:#e9e8ea;
+  --raio:22px 22px 22px 6px;
+  --sombra:0 10px 30px -12px rgba(0,16,137,.28);
+}
 
-saldo_acumulado = 0.0
-for i in range(idx_atual + 1):
-    m_nome = ordem_meses[i]
-    if m_nome in st.session_state.dados_meses:
-        d = st.session_state.dados_meses[m_nome]
-        t_ent = sum(d.get("entradas", {}).values())
-        t_esp = sum(d.get("essenciais", {}).values()) + sum(
-            d.get("nao_essenciais", {}).values()
-        )
-        saldo_acumulado += t_ent - t_esp
+html, body, [class*="css"]{ font-family:'Poppins',sans-serif; color:var(--azul); }
 
-pct_ess = (
-    (total_essenciais / total_entradas * 100) if total_entradas > 0 else 0.0
-)
-pct_ness = (
-    (total_nao_essenciais / total_entradas * 100) if total_entradas > 0 else 0.0
-)
-pct_sobra = (sobra_mensal / total_entradas * 100) if total_entradas > 0 else 0.0
+.stApp{
+  background:
+    radial-gradient(900px 420px at 100% -5%, rgba(153,24,237,.14), transparent 60%),
+    radial-gradient(700px 500px at -5% 35%, rgba(185,194,249,.55), transparent 60%),
+    #F6F7FD;
+}
 
-st.title(f"FluxoClaro — Painel Gerencial ({mes_referencia})")
+/* ---------- Títulos ---------- */
+h1{ font-weight:900 !important; color:var(--azul) !important; letter-spacing:-.02em; }
+h2,h3,h4{ font-weight:800 !important; color:var(--azul) !important; letter-spacing:-.01em; }
 
-c1, c2, c3, c4, c5, c6 = st.columns(6)
-c1.metric(
-    "1. Total de Entradas",
-    format_brl(total_entradas),
-    delta="Receita registrada",
-    delta_color="off",
-)
-c2.metric(
-    "2. Despesas Essenciais",
-    format_brl(total_essenciais),
-    f"{pct_ess:.1f}% da renda",
-)
-c3.metric(
-    "3. Despesas Não Essenciais",
-    format_brl(total_nao_essenciais),
-    f"{pct_ness:.1f}% da renda",
-)
-c4.metric(
-    "4. Sobra Mensal Prevista",
-    format_brl(sobra_mensal),
-    f"{pct_sobra:+.1f}% margem",
-)
-c5.metric(
-    "5. Saldo Acumulado (Caixinha)",
-    format_brl(saldo_acumulado),
-    "Acumulado no ano",
-)
-c6.metric(
-    "6. Meta da Reserva",
-    format_brl(st.session_state.meta_reserva_alvo),
-    f"Faltam {format_brl(max(0.0, st.session_state.meta_reserva_alvo - st.session_state.saldo_atual_reserva))}",
-)
+/* ---------- Hero ---------- */
+.fc-hero{
+  position:relative; overflow:hidden; color:#fff;
+  padding:30px 36px 28px; margin:-.5rem 0 1.6rem;
+  border-radius:30px 30px 30px 8px;
+  background:linear-gradient(120deg,#001089 0%,#3a1aa8 45%,#9918ed 100%);
+  box-shadow:0 22px 40px -18px rgba(0,16,137,.55);
+}
+.fc-hero::before{
+  content:""; position:absolute; right:-70px; top:-90px; width:300px; height:300px; border-radius:50%;
+  background:radial-gradient(circle,rgba(255,255,255,.28),transparent 65%);
+}
+.fc-hero::after{
+  content:""; position:absolute; right:140px; bottom:-120px; width:240px; height:240px; border-radius:50%;
+  border:34px solid rgba(255,255,255,.10);
+}
+.fc-hero h1{ color:#fff !important; margin:0; font-size:2.1rem; line-height:1.15; position:relative; z-index:1; padding:0; }
+.fc-hero p{ margin:.35rem 0 0; font-weight:500; opacity:.85; position:relative; z-index:1; }
+.fc-chip{
+  display:inline-block; margin-top:14px; padding:6px 16px; border-radius:999px; position:relative; z-index:1;
+  background:rgba(255,255,255,.16); border:1px solid rgba(255,255,255,.35);
+  font-weight:600; font-size:.85rem; backdrop-filter:blur(6px);
+}
 
-st.divider()
+/* ---------- Sidebar ---------- */
+[data-testid="stSidebar"]{
+  background:linear-gradient(180deg,#FFFFFF 0%,#f4effb 100%) !important;
+  border-right:none !important;
+  border-radius:0 32px 32px 0;
+  box-shadow:10px 0 40px -14px rgba(110,26,172,.25);
+}
+[data-testid="stSidebar"] > div:first-child{ padding:1rem 1.2rem; }
+[data-testid="stSidebar"] h2{ font-size:1.25rem; }
 
-aba_planilha, aba_graficos, aba_metas = st.tabs([
-    "📋 Planilha de Entradas e Despesas",
-    "📊 Evolução & Comparações Mensais",
-    "🎯 Metas de Economia",
-])
+/* ---------- Métricas ---------- */
+div[data-testid="stMetric"]{
+  position:relative; overflow:hidden;
+  background:#fff; border:1px solid var(--lav);
+  border-radius:var(--raio); padding:20px 18px 16px;
+  box-shadow:var(--sombra);
+  transition:transform .18s ease, box-shadow .18s ease;
+}
+div[data-testid="stMetric"]:hover{ transform:translateY(-3px); box-shadow:0 16px 34px -12px rgba(153,24,237,.38); }
+div[data-testid="stMetric"]::before{
+  content:""; position:absolute; left:0; right:0; top:0; height:6px;
+  background:var(--faixa,linear-gradient(90deg,#001089,#9918ed));
+}
+div[data-testid="stMetricLabel"] p{ font-weight:600; font-size:.8rem; color:var(--roxo-esc) !important; }
+div[data-testid="stMetricValue"]{ color:var(--azul) !important; font-weight:800 !important; font-size:1.45rem !important; }
 
-with aba_planilha:
-    col_ent, col_ess, col_ness = st.columns(3, gap="medium")
-    with col_ent:
-        st.subheader("1. Entradas")
-        for k, v in list(st.session_state.entradas.items()):
-            st.session_state.entradas[k] = st.number_input(
-                k, min_value=0.0, value=float(v), step=50.0, key=f"ent_{k}"
-            )
-        st.info(
-            f"**TOTAL DE ENTRADAS:**"
-            f" {format_brl(sum(st.session_state.entradas.values()))}"
-        )
+/* uma faixa de cor diferente por métrica */
+[data-testid="stHorizontalBlock"] > div:nth-child(1) [data-testid="stMetric"]{ --faixa:linear-gradient(90deg,#001089,#4a5ee0); }
+[data-testid="stHorizontalBlock"] > div:nth-child(2) [data-testid="stMetric"]{ --faixa:linear-gradient(90deg,#6e1aac,#9918ed); }
+[data-testid="stHorizontalBlock"] > div:nth-child(3) [data-testid="stMetric"]{ --faixa:linear-gradient(90deg,#9918ed,#d9a3ff); }
+[data-testid="stHorizontalBlock"] > div:nth-child(4) [data-testid="stMetric"]{ --faixa:linear-gradient(90deg,#4a5ee0,#b9c2f9); }
+[data-testid="stHorizontalBlock"] > div:nth-child(5) [data-testid="stMetric"]{ --faixa:linear-gradient(90deg,#001089,#9918ed); }
+[data-testid="stHorizontalBlock"] > div:nth-child(6) [data-testid="stMetric"]{ --faixa:linear-gradient(90deg,#9918ed,#001089); }
 
-    with col_ess:
-        st.subheader("2. Despesas Essenciais")
-        for k, v in list(st.session_state.essenciais.items()):
-            st.session_state.essenciais[k] = st.number_input(
-                k, min_value=0.0, value=float(v), step=25.0, key=f"ess_{k}"
-            )
-        st.info(
-            f"**TOTAL DESPESAS ESSENCIAIS:**"
-            f" {format_brl(sum(st.session_state.essenciais.values()))}"
-        )
+/* ---------- Abas em pílula ---------- */
+[data-baseweb="tab-list"]{
+  gap:8px; background:#fff; padding:6px; border-radius:999px;
+  border:1px solid var(--lav); box-shadow:var(--sombra); width:fit-content; max-width:100%;
+}
+[data-baseweb="tab"]{ border-radius:999px !important; padding:8px 20px !important; font-weight:600; color:var(--azul); height:auto; }
+[data-baseweb="tab"][aria-selected="true"]{
+  background:linear-gradient(120deg,#001089,#9918ed) !important; color:#fff !important;
+  box-shadow:0 8px 18px -8px rgba(153,24,237,.7);
+}
+[data-baseweb="tab"][aria-selected="true"] p{ color:#fff !important; }
+[data-baseweb="tab-highlight"], [data-baseweb="tab-border"]{ display:none !important; }
 
-    with col_ness:
-        st.subheader("3. Despesas Não Essenciais")
-        for k, v in list(st.session_state.nao_essenciais.items()):
-            st.session_state.nao_essenciais[k] = st.number_input(
-                k, min_value=0.0, value=float(v), step=20.0, key=f"ness_{k}"
-            )
-        st.info(
-            f"**TOTAL NÃO ESSENCIAIS:**"
-            f" {format_brl(sum(st.session_state.nao_essenciais.values()))}"
-        )
+/* ---------- Campos ---------- */
+div[data-baseweb="input"], div[data-baseweb="select"] > div, div[data-baseweb="base-input"]{
+  border-radius:14px !important; border-color:var(--peri) !important; background:#fff !important;
+}
+div[data-baseweb="input"]:focus-within, div[data-baseweb="select"] > div:focus-within{
+  border-color:var(--roxo) !important; box-shadow:0 0 0 4px rgba(153,24,237,.15) !important;
+}
+label p{ font-weight:600 !important; color:var(--azul) !important; }
 
-with aba_graficos:
-    st.subheader("📊 Filtro de Análise de Gráficos")
-    filtro_ano_grafico = st.selectbox("Filtrar Gráficos por Ano", ["Todos os Anos"] + anos_disponiveis)
+/* ---------- Botões ---------- */
+.stButton > button{
+  border-radius:999px; font-weight:700; padding:.55rem 1.2rem;
+  border:2px solid var(--peri); background:#fff; color:var(--azul);
+  transition:all .18s ease;
+}
+.stButton > button:hover{ border-color:var(--roxo); color:var(--roxo); transform:translateY(-1px); }
+.stButton > button[kind="primary"]{
+  border:none; color:#fff; background:linear-gradient(120deg,#001089,#9918ed);
+  box-shadow:0 12px 22px -10px rgba(153,24,237,.75);
+}
+.stButton > button[kind="primary"]:hover{ color:#fff; filter:brightness(1.08); }
 
-    st.divider()
-    st.subheader("1. Evolução em Coluna Mensal (Entradas vs Despesas)")
+/* ---------- Avisos (totais) ---------- */
+div[data-testid="stAlert"]{
+  background:linear-gradient(100deg,var(--lav),#f3eefb) !important;
+  color:var(--azul) !important; border:none !important;
+  border-left:6px solid var(--roxo) !important;
+  border-radius:16px 16px 16px 4px !important;
+}
+div[data-testid="stAlert"] *{ color:var(--azul) !important; }
 
-    historico_data = []
-    for m in ordem_meses:
-        ano_do_mes = m.split(" ")[1]
-        if filtro_ano_grafico != "Todos os Anos" and ano_do_mes != filtro_ano_grafico:
-            continue
+/* ---------- Expander, gráficos, progresso, divisor ---------- */
+details{ background:#fff; border:1px solid var(--peri) !important; border-radius:18px !important; box-shadow:var(--sombra); }
+div[data-testid="stPlotlyChart"]{
+  background:#fff; border:1px solid var(--lav); border-radius:var(--raio);
+  padding:14px; box-shadow:var(--sombra);
+}
+div[data-testid="stProgress"] > div > div{ background:var(--lav) !important; border-radius:999px; height:12px; }
+div[data-testid="stProgress"] > div > div > div{ background:linear-gradient(90deg,#001089,#9918ed) !important; border-radius:999px; }
+hr{ border:none !important; height:3px !important; border-radius:3px; background:linear-gradient(90deg,#9918ed,#b9c2f9 55%,transparent) !important; opacity:.55; }
+</style>
+"""
 
-        if m in st.session_state.dados_meses:
-            d = st.session_state.dados_meses[m]
-            t_ent = sum(d.get("entradas", {}).values())
-            t_ess = sum(d.get("essenciais", {}).values())
-            t_ness = sum(d.get("nao_essenciais", {}).values())
 
-            if t_ent > 0 or t_ess > 0 or t_ness > 0:
-                historico_data.append(
-                    {"Mês": m, "Categoria": "Entradas", "Valor": t_ent}
-                )
-                historico_data.append(
-                    {"Mês": m, "Categoria": "Despesas Essenciais", "Valor": t_ess}
-                )
-                historico_data.append(
-                    {"Mês": m, "Categoria": "Despesas Não Essenciais", "Valor": t_ness}
-                )
+def aplicar_tema():
+    st.markdown(_CSS, unsafe_allow_html=True)
 
-    df_hist = pd.DataFrame(historico_data)
 
-    if not df_hist.empty:
-        fig_colunas = px.bar(
-            df_hist,
-            x="Mês",
-            y="Valor",
-            color="Categoria",
-            barmode="group",
-            text_auto=".2f",
-            color_discrete_map={
-                "Entradas": "#001089",
-                "Despesas Essenciais": "#6e1aac",
-                "Despesas Não Essenciais": "#9918ed",
-            },
-            title=f"Comparativo Mensal de Entradas e Despesas ({filtro_ano_grafico})",
-        )
-        fig_colunas.update_layout(
-            paper_bgcolor="#FFFFFF", plot_bgcolor="#FFFFFF", font_color="#001089"
-        )
-        st.plotly_chart(fig_colunas, use_container_width=True)
-    else:
-        st.info("Preencha e salve dados no ano selecionado para exibir o gráfico.")
+def hero(titulo: str, subtitulo: str = "", chip: str = ""):
+    chip_html = f'<span class="fc-chip">{chip}</span>' if chip else ""
+    sub_html = f"<p>{subtitulo}</p>" if subtitulo else ""
+    st.markdown(
+        f'<div class="fc-hero"><h1>{titulo}</h1>{sub_html}{chip_html}</div>',
+        unsafe_allow_html=True,
+    )
 
-    st.divider()
-    st.subheader("2. Comparação da Sobra Mensal ao Longo do Tempo")
 
-    sobra_data = []
-    for m in ordem_meses:
-        ano_do_mes = m.split(" ")[1]
-        if filtro_ano_grafico != "Todos os Anos" and ano_do_mes != filtro_ano_grafico:
-            continue
-
-        if m in st.session_state.dados_meses:
-            d = st.session_state.dados_meses[m]
-            t_ent = sum(d.get("entradas", {}).values())
-            t_esp = sum(d.get("essenciais", {}).values()) + sum(
-                d.get("nao_essenciais", {}).values()
-            )
-            sobra_val = t_ent - t_esp
-            if t_ent > 0 or t_esp > 0:
-                sobra_data.append({"Mês": m, "Sobra Mensal": sobra_val})
-
-    df_sobra = pd.DataFrame(sobra_data)
-    if not df_sobra.empty:
-        fig_sobra = px.bar(
-            df_sobra,
-            x="Mês",
-            y="Sobra Mensal",
-            text_auto=".2f",
-            color="Sobra Mensal",
-            color_continuous_scale=["#9918ed", "#001089"],
-            title=f"Evolução da Sobra Financeira Mensal ({filtro_ano_grafico})",
-        )
-        fig_sobra.update_layout(
-            paper_bgcolor="#FFFFFF", plot_bgcolor="#FFFFFF", font_color="#001089"
-        )
-        st.plotly_chart(fig_sobra, use_container_width=True)
-    else:
-        st.info(
-            "Preencha os valores e clique em 'Salvar / Confirmar na Nuvem' para visualizar o histórico temporal."
-        )
-
-with aba_metas:
-    st.subheader("Minhas Metas de Economia")
-    todas_categorias_despesa = {
-        **st.session_state.essenciais,
-        **st.session_state.nao_essenciais,
-    }
-
-    with st.expander("➕ Adicionar Nova Meta de Economia"):
-        m_titulo = st.text_input("Descrição da Meta (ex: Viagem em Família)")
-        m_cat = st.selectbox(
-            "Categoria Vinculada",
-            ["SOBRA_MENSAL"] + list(todas_categorias_despesa.keys()),
-        )
-        m_valor = st.number_input(
-            "Valor da Meta / Teto (R$)", min_value=10.0, value=500.0, step=50.0
-        )
-        if st.button("Salvar Meta"):
-            st.session_state.metas_economia.append({
-                "titulo": m_titulo or f"Meta {m_cat}",
-                "categoria": m_cat,
-                "meta": float(m_valor),
-            })
-            st.success(
-                "Meta adicionada! Lembre-se de clicar em 'Salvar na Nuvem' para gravar."
-            )
-            st.rerun()
-
-    if not st.session_state.metas_economia:
-        st.info(
-            "Ainda não tem nenhuma meta cadastrada. Use o botão acima para criar a sua primeira meta!"
-        )
-    else:
-        st.divider()
-        for idx, meta in enumerate(list(st.session_state.metas_economia)):
-            cat = meta["categoria"]
-            alvo = meta["meta"]
-            real = (
-                max(0.0, sobra_mensal)
-                if cat == "SOBRA_MENSAL"
-                else todas_categorias_despesa.get(cat, 0.0)
-            )
-            pct = min(1.0, real / alvo) if alvo > 0 else 0.0
-
-            col_m1, col_m2 = st.columns([5, 1])
-            with col_m1:
-                st.markdown(
-                    f"**{meta['titulo']}** — Atual: {format_brl(real)} / Meta: {format_brl(alvo)}"
-                )
-                st.progress(pct)
-            with col_m2:
-                st.write("")
-                if st.button("🗑️ Excluir", key=f"del_meta_{idx}"):
-                    st.session_state.metas_economia.pop(idx)
-                    st.success("Meta excluída. Clique em 'Salvar na Nuvem' para atualizar.")
-                    st.rerun()
+def estilizar_figura(fig):
+    fig.update_layout(
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(family="Poppins, sans-serif", color="#001089"),
+        title=dict(font=dict(size=17, family="Poppins, sans-serif"), x=0.01),
+        legend=dict(orientation="h", y=1.14, x=0, title_text=""),
+        margin=dict(t=90, l=10, r=10, b=10),
+        hoverlabel=dict(bgcolor="#001089", font_color="#fff", font_family="Poppins"),
+        bargap=0.28,
+    )
+    fig.update_xaxes(showgrid=False, linecolor="#b9c2f9", title_text="")
+    fig.update_yaxes(gridcolor="#e8e9f9", zeroline=False, title_text="")
+    fig.update_traces(marker_line_width=0, textfont_size=11)
+    try:
+        fig.update_layout(barcornerradius=10)  # Plotly 6+
+    except Exception:
+        pass
+    return fig

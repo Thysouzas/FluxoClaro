@@ -169,6 +169,18 @@ ordem_meses = [
     "Outubro 2026",
     "Novembro 2026",
     "Dezembro 2026",
+    "Janeiro 2027",
+    "Fevereiro 2027",
+    "Março 2027",
+    "Abril 2027",
+    "Maio 2027",
+    "Junho 2027",
+    "Julho 2027",
+    "Agosto 2027",
+    "Setembro 2027",
+    "Outubro 2027",
+    "Novembro 2027",
+    "Dezembro 2027",
 ]
 
 # Inicialização dos dados globais da nuvem
@@ -204,10 +216,10 @@ with st.sidebar:
   mes_referencia = st.selectbox(
       "Mês de Referência",
       ordem_meses,
-      index=10,
+      index=9,  # Outubro 2026 por padrão
   )
 
-  # Sincroniza o mês selecionado com o session_state
+  # Sincroniza o mês selecionado com o session_state sem puxar dados de outros meses
   if (
       "mes_atual_ativo" not in st.session_state
       or st.session_state.mes_atual_ativo != mes_referencia
@@ -225,6 +237,15 @@ with st.sidebar:
     st.session_state.nao_essenciais = m_atual.get(
         "nao_essenciais", get_default_mes()["nao_essenciais"]
     ).copy()
+
+    # Atualiza explicitamente as chaves dos widgets para evitar persistência indesejada entre meses
+    for k, v in st.session_state.entradas.items():
+      st.session_state[f"ent_{k}"] = float(v)
+    for k, v in st.session_state.essenciais.items():
+      st.session_state[f"ess_{k}"] = float(v)
+    for k, v in st.session_state.nao_essenciais.items():
+      st.session_state[f"ness_{k}"] = float(v)
+
     st.session_state.mes_atual_ativo = mes_referencia
 
   st.divider()
@@ -333,7 +354,7 @@ total_nao_essenciais = sum(st.session_state.nao_essenciais.values())
 total_despesas = total_essenciais + total_nao_essenciais
 sobra_mensal = total_entradas - total_despesas
 
-# Cálculo do Saldo Acumulado (Caixinha) de Janeiro até o Mês Selecionado
+# Cálculo do Saldo Acumulado (Caixinha) de Janeiro de 2026 até o Mês Selecionado
 try:
   idx_atual = ordem_meses.index(mes_referencia)
 except ValueError:
@@ -536,7 +557,6 @@ with aba_metas:
       })
       st.success(
           "Meta adicionada! Lembre-se de clicar em 'Salvar na Nuvem' para"
-          " gravar."
       )
       st.rerun()
 

@@ -350,6 +350,15 @@ for i in range(idx_atual + 1):
     )
     saldo_acumulado += t_ent - t_esp
 
+# Percentuais para as métricas
+pct_ess = (
+    (total_essenciais / total_entradas * 100) if total_entradas > 0 else 0.0
+)
+pct_ness = (
+    (total_nao_essenciais / total_entradas * 100) if total_entradas > 0 else 0.0
+)
+pct_sobra = (sobra_mensal / total_entradas * 100) if total_entradas > 0 else 0.0
+
 # Cabeçalho e Indicadores no Topo (6 Colunas)
 st.title(f"FluxoClaro — Painel Gerencial ({mes_referencia})")
 
@@ -358,13 +367,106 @@ c1.metric("1. Total de Entradas", format_brl(total_entradas))
 c2.metric(
     "2. Despesas Essenciais",
     format_brl(total_essenciais),
-    (
-        f"{(total_essenciais/total_entradas*100 if total_entradas else 0):.1f}%"
-        " da renda"
-    ),
+    f"{pct_ess:.1f}% da renda",
 )
 c3.metric(
     "3. Despesas Não Essenciais",
     format_brl(total_nao_essenciais),
-    (
-        f"{(total_nao_essenciais/total_entradas*100 if total_entradas else 0):
+    f"{pct_ness:.1f}% da renda",
+)
+c4.metric(
+    "4. Sobra Mensal Prevista",
+    format_brl(sobra_mensal),
+    f"{pct_sobra:+.1f}% margem",
+)
+c5.metric(
+    "5. Saldo Acumulado (Caixinha)",
+    format_brl(saldo_acumulado),
+    "Acumulado no ano",
+)
+c6.metric(
+    "6. Meta da Reserva",
+    format_brl(st.session_state.meta_reserva_alvo),
+    f"Faltam {format_brl(max(0.0, st.session_state.meta_reserva_alvo - st.session_state.saldo_atual_reserva))}",
+)
+
+st.divider()
+
+aba_planilha, aba_graficos, aba_metas = st.tabs([
+    "📋 Planilha de Entradas e Despesas",
+    "📊 Evolução & Comparações Mensais",
+    "🎯 Metas de Economia",
+])
+
+with aba_planilha:
+  col_ent, col_ess, col_ness = st.columns(3, gap="medium")
+  with col_ent:
+    st.subheader("1. Entradas")
+    for k, v in list(st.session_state.entradas.items()):
+      st.session_state.entradas[k] = st.number_input(
+          k, min_value=0.0, value=float(v), step=50.0, key=f"ent_{k}"
+      )
+    st.info(
+        f"**TOTAL DE ENTRADAS:**"
+        f" {format_brl(sum(st.session_state.entradas.values()))}"
+    )
+
+  with col_ess:
+    st.subheader("2. Despesas Essenciais")
+    for k, v in list(st.session_state.essenciais.items()):
+      st.session_state.essenciais[k] = st.number_input(
+          k, min_value=0.0, value=float(v), step=25.0, key=f"ess_{k}"
+      )
+    st.info(
+        f"**TOTAL DESPESAS ESSENCIAIS:**"
+        f" {format_brl(sum(st.session_state.essenciais.values()))}"
+    )
+
+  with col_ness:
+    st.subheader("3. Despesas Não Essenciais")
+    for k, v in list(st.session_state.nao_essenciais.items()):
+      st.session_state.nao_essenciais[k] = st.number_input(
+          k, min_value=0.0, value=float(v), step=20.0, key=f"ness_{k}"
+      )
+    st.info(
+        f"**TOTAL NÃO ESSENCIAIS:**"
+        f" {format_brl(sum(st.session_state.nao_essenciais.values()))}"
+    )
+
+with aba_graficos:
+  st.subheader("1. Evolução em Coluna Mensal (Entradas vs Despesas)")
+
+  historico_data = []
+  for m in ordem_meses:
+    if m in st.session_state.dados_meses:
+      d = st.session_state.dados_meses[m]
+      t_ent = sum(d.get("entradas", {}).values())
+      t_ess = sum(d.get("essenciais", {}).values())
+      t_ness = sum(d.get("nao_essenciais", {}).values())
+
+      historico_data.append(
+          {"Mês": m, "Categoria": "Entradas", "Valor": t_ent}
+      )
+      historico_data.append(
+          {"Mês": m, "Categoria": "Despesas Essenciais", "Valor": t_ess}
+      )
+      historico_data.append(
+          {"Mês": m, "Categoria": "Despesas Não Essenciais", "Valor": t_ness}
+      )
+
+  df_hist = pd.DataFrame(historico_data)
+
+  if not df_hist.empty:
+    fig_colunas = px.bar(
+        df_hist,
+        x="Mês",
+        y="Valor",
+        color="Categoria",
+        barmode="group",
+        text_auto=".2f",
+        color_discrete_map={
+            "Entradas": "#001089",
+            "Despesas Essenciais": "#6e1aac",
+            "Despesas Não Essenciais": "#9918ed",
+        },
+        title="Comparativo Mens

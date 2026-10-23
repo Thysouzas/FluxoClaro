@@ -381,4 +381,167 @@ with aba_planilha:
   with col_ness:
     st.subheader("3. Despesas Não Essenciais")
     for k, v in list(st.session_state.nao_essenciais.items()):
-      st.session_state.nao_essenciais[k] = st.number
+      st.session_state.nao_essenciais[k] = st.number_input(
+          k, min_value=0.0, value=float(v), step=20.0, key=f"ness_{k}"
+      )
+    st.info(
+        f"**TOTAL NÃO ESSENCIAIS:**"
+        f" {format_brl(sum(st.session_state.nao_essenciais.values()))}"
+    )
+
+with aba_graficos:
+  st.subheader(
+      "1. Gráfico de Barras Interativo: Categorias de Entradas vs. Despesas"
+  )
+  dados_barras = (
+      [
+          {"Categoria": k, "Valor": v, "Tipo": "1. Entradas"}
+          for k, v in st.session_state.entradas.items()
+          if v > 0
+      ]
+      + [
+          {"Categoria": k, "Valor": v, "Tipo": "2. Despesas Essenciais"}
+          for k, v in st.session_state.essenciais.items()
+          if v > 0
+      ]
+      + [
+          {"Categoria": k, "Valor": v, "Tipo": "3. Despesas Não Essenciais"}
+          for k, v in st.session_state.nao_essenciais.items()
+          if v > 0
+      ]
+  )
+  if dados_barras:
+    df_barras = pd.DataFrame(dados_barras).sort_values(
+        by="Valor", ascending=True
+    )
+    fig_barras = px.bar(
+        df_barras,
+        x="Valor",
+        y="Categoria",
+        color="Tipo",
+        orientation="h",
+        text_auto=".2f",
+        color_discrete_map={
+            "1. Entradas": "#001089",
+            "2. Despesas Essenciais": "#6e1aac",
+            "3. Despesas Não Essenciais": "#9918ed",
+        },
+    )
+    fig_barras.update_layout(
+        paper_bgcolor="#FFFFFF", plot_bgcolor="#FFFFFF", font_color="#001089"
+    )
+    st.plotly_chart(fig_barras, use_container_width=True)
+
+  st.divider()
+  st.subheader(
+      "2. Gráficos de Pizza: Distribuição das Despesas Essenciais e Não"
+      " Essenciais"
+  )
+  p_col1, p_col2, p_col3 = st.columns(3)
+
+  with p_col1:
+    df_macro = pd.DataFrame({
+        "Grupo": ["Despesas Essenciais", "Despesas Não Essenciais"],
+        "Valor": [total_essenciais, total_nao_essenciais],
+    })
+    fig_p1 = px.pie(
+        df_macro,
+        names="Grupo",
+        values="Valor",
+        hole=0.45,
+        title="Proporção Geral de Despesas",
+        color="Grupo",
+        color_discrete_map={
+            "Despesas Essenciais": "#001089",
+            "Despesas Não Essenciais": "#9918ed",
+        },
+    )
+    fig_p1.update_layout(paper_bgcolor="#FFFFFF", font_color="#001089")
+    st.plotly_chart(fig_p1, use_container_width=True)
+
+  with p_col2:
+    df_ess = pd.DataFrame([
+        {"Item": k, "Valor": v}
+        for k, v in st.session_state.essenciais.items()
+        if v > 0
+    ])
+    if not df_ess.empty:
+      fig_p2 = px.pie(
+          df_ess,
+          names="Item",
+          values="Valor",
+          hole=0.45,
+          title="Detalhamento: Despesas Essenciais",
+          color_discrete_sequence=[
+              "#001089",
+              "#6e1aac",
+              "#9918ed",
+              "#b9c2f9",
+              "#dfd3ea",
+          ],
+      )
+      fig_p2.update_layout(paper_bgcolor="#FFFFFF", font_color="#001089")
+      st.plotly_chart(fig_p2, use_container_width=True)
+
+  with p_col3:
+    df_ness = pd.DataFrame([
+        {"Item": k, "Valor": v}
+        for k, v in st.session_state.nao_essenciais.items()
+        if v > 0
+    ])
+    if not df_ness.empty:
+      fig_p3 = px.pie(
+          df_ness,
+          names="Item",
+          values="Valor",
+          hole=0.45,
+          title="Detalhamento: Não Essenciais",
+          color_discrete_sequence=[
+              "#9918ed",
+              "#6e1aac",
+              "#001089",
+              "#b9c2f9",
+              "#dfd3ea",
+          ],
+      )
+      fig_p3.update_layout(paper_bgcolor="#FFFFFF", font_color="#001089")
+      st.plotly_chart(fig_p3, use_container_width=True)
+
+with aba_metas:
+  st.subheader("Metas de Economia Mensal vs. Gastos Reais")
+  todas_categorias_despesa = {
+      **st.session_state.essenciais,
+      **st.session_state.nao_essenciais,
+  }
+
+  with st.expander("➕ Adicionar Nova Meta de Economia"):
+    m_titulo = st.text_input("Descrição da Meta (ex: Economizar em Lazer)")
+    m_cat = st.selectbox(
+        "Categoria Vinculada",
+        ["SOBRA_MENSAL"] + list(todas_categorias_despesa.keys()),
+    )
+    m_valor = st.number_input(
+        "Valor da Meta / Teto (R$)", min_value=10.0, value=500.0, step=50.0
+    )
+    if st.button("Salvar Meta"):
+      st.session_state.metas_economia.append({
+          "titulo": m_titulo or f"Meta {m_cat}",
+          "categoria": m_cat,
+          "meta": float(m_valor),
+      })
+      st.rerun()
+
+  for idx, meta in enumerate(list(st.session_state.metas_economia)):
+    cat = meta["categoria"]
+    alvo = meta["meta"]
+    real = (
+        max(0.0, sobra_mensal)
+        if cat == "SOBRA_MENSAL"
+        else todas_categorias_despesa.get(cat, 0.0)
+    )
+    pct = min(1.0, real / alvo) if alvo > 0 else 0.0
+    st.markdown(
+        f"**{meta['titulo']}** — Atual: {format_brl(real)} / Meta:"
+        f" {format_brl(alvo)}"
+    )
+    st.progress(pct)

@@ -5,7 +5,7 @@ Identidade Visual Oficial:
 - Cores Principais: #001089, #9918ed, #6e1aac
 - Variação de Cores (Fundo Sempre Claro): #e8e9f9, #b9c2f9, #dfd3ea, #e9e8ea
 - Tipografia: Poppins Black (Títulos) e Poppins ExtraBold (Subtítulos)
-- Persistência: Banco de Dados SQLite integrado para salvar dados na nuvem.
+- Persistência: Banco de Dados SQLite integrado com salvamento instantâneo.
 """
 
 import sqlite3
@@ -194,7 +194,6 @@ with st.sidebar:
       index=10,
   )
 
-  # Carregar dados do banco para o mês selecionado
   ent_banco, ess_banco, ness_banco = carregar_dados_mes(mes_referencia)
 
   if (
@@ -295,7 +294,6 @@ with st.sidebar:
       cat_nova = st.text_input("Novo Nome", value=cat_antiga)
       if st.button("Salvar Novo Nome", use_container_width=True):
         if cat_nova.strip() and cat_nova.strip() != cat_antiga:
-          # Remove antiga do DB
           conn = sqlite3.connect("fluxo_claro.db")
           cursor = conn.cursor()
           cursor.execute(
@@ -325,7 +323,6 @@ with st.sidebar:
           "Confirmar Exclusão", type="primary", use_container_width=True
       ):
         dict_alvo.pop(cat_excluir, None)
-        # Apaga permanentemente do banco de dados SQLite
         conn = sqlite3.connect("fluxo_claro.db")
         cursor = conn.cursor()
         cursor.execute(
@@ -396,29 +393,22 @@ aba_planilha, aba_graficos, aba_metas = st.tabs([
 ])
 
 with aba_planilha:
-  col_btn1, col_btn2 = st.columns([4, 1])
-  with col_btn2:
-    if st.button("💾 Salvar Alterações", use_container_width=True, type="primary"):
-      salvar_dados_mes(
-          mes_referencia,
-          st.session_state.entradas,
-          st.session_state.essenciais,
-          st.session_state.nao_essenciais,
-      )
-      st.success("Dados salvos com sucesso no banco de dados!")
-
   col_ent, col_ess, col_ness = st.columns(3, gap="medium")
+  dados_alterados = False
 
   with col_ent:
     st.subheader("1. Entradas")
     for k, v in list(st.session_state.entradas.items()):
-      st.session_state.entradas[k] = st.number_input(
+      novo_val = st.number_input(
           k,
           min_value=0.0,
           value=float(v),
           step=50.0,
           key=f"ent_{mes_referencia}_{k}",
       )
+      if novo_val != v:
+        st.session_state.entradas[k] = novo_val
+        dados_alterados = True
     st.info(
         f"**TOTAL DE ENTRADAS:**"
         f" {format_brl(sum(st.session_state.entradas.values()))}"
@@ -427,13 +417,16 @@ with aba_planilha:
   with col_ess:
     st.subheader("2. Despesas Essenciais")
     for k, v in list(st.session_state.essenciais.items()):
-      st.session_state.essenciais[k] = st.number_input(
+      novo_val = st.number_input(
           k,
           min_value=0.0,
           value=float(v),
           step=25.0,
           key=f"ess_{mes_referencia}_{k}",
       )
+      if novo_val != v:
+        st.session_state.essenciais[k] = novo_val
+        dados_alterados = True
     st.info(
         f"**TOTAL DESPESAS ESSENCIAIS:**"
         f" {format_brl(sum(st.session_state.essenciais.values()))}"
@@ -442,25 +435,30 @@ with aba_planilha:
   with col_ness:
     st.subheader("3. Despesas Não Essenciais")
     for k, v in list(st.session_state.nao_essenciais.items()):
-      st.session_state.nao_essenciais[k] = st.number_input(
+      novo_val = st.number_input(
           k,
           min_value=0.0,
           value=float(v),
           step=20.0,
           key=f"ness_{mes_referencia}_{k}",
       )
+      if novo_val != v:
+        st.session_state.nao_essenciais[k] = novo_val
+        dados_alterados = True
     st.info(
         f"**TOTAL NÃO ESSENCIAIS:**"
         f" {format_brl(sum(st.session_state.nao_essenciais.values()))}"
     )
 
-  # Salvar automaticamente a cada alteração
-  salvar_dados_mes(
-      mes_referencia,
-      st.session_state.entradas,
-      st.session_state.essenciais,
-      st.session_state.nao_essenciais,
-  )
+  # Salva automaticamente e instantaneamente no banco de dados se houver alteração
+  if dados_alterados:
+    salvar_dados_mes(
+        mes_referencia,
+        st.session_state.entradas,
+        st.session_state.essenciais,
+        st.session_state.nao_essenciais,
+    )
+    st.rerun()
 
 with aba_graficos:
   st.subheader(

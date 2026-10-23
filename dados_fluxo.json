@@ -26,7 +26,7 @@
         }
     },
     "meta_reserva_alvo": 35000.0,
-    "saldo_atual_reserva": 5500.0,
+    "saldo_atual_reserva": 0.0,
     "metas_economia": [],
     "Outubro 2026": {
         "entradas": {
@@ -58,18 +58,41 @@
             "Outros": 0.0
         },
         "essenciais": {
-            "Faculdade": 239.34,
-            "MEI (DAS)": 86.05,
-            "Plano Celular (TIM)": 59.99,
-            "Internet (Ligga)": 118.68,
-            "Energia (Copel)": 175.71,
-            "Cond. R. Redzimski": 279.72,
-            "Cond. R. Eduarda Sprada": 439.22,
+            "Faculdade": 0.0,
+            "MEI (DAS)": 0.0,
+            "Plano Celular (TIM)": 0.0,
+            "Internet (Ligga)": 0.0,
+            "Energia (Copel)": 0.0,
+            "Cond. R. Redzimski": 0.0,
+            "Cond. R. Eduarda Sprada": 0.0,
             "IPTU": 0.0
         },
         "nao_essenciais": {
-            "Cartão de Crédito PF": 1353.59,
-            "Cartão de Crédito PJ": 310.06,
+            "Cartão de Crédito PF": 0.0,
+            "Cartão de Crédito PJ": 0.0,
+            "Outras Despesas: Presentes e Diversos": 0.0,
+            "Imprevistos": 0.0
+        }
+    },
+    "Maio 2026": {
+        "entradas": {
+            "Aluguel": 0.0,
+            "Salario": 0.0,
+            "Outros": 0.0
+        },
+        "essenciais": {
+            "Faculdade": 0.0,
+            "MEI (DAS)": 0.0,
+            "Plano Celular (TIM)": 0.0,
+            "Internet (Ligga)": 0.0,
+            "Energia (Copel)": 0.0,
+            "Cond. R. Redzimski": 0.0,
+            "Cond. R. Eduarda Sprada": 0.0,
+            "IPTU": 0.0
+        },
+        "nao_essenciais": {
+            "Cartão de Crédito PF": 0.0,
+            "Cartão de Crédito PJ": 0.0,
             "Outras Despesas: Presentes e Diversos": 0.0,
             "Imprevistos": 0.0
         }

@@ -21,16 +21,26 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# --- CONFIGURAÇÃO DO SEU SERVIDOR GITHUB ---
-GITHUB_TOKEN = "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"
-REPO_NAME = "Thysouzas/FluxoClaro"
+# --- CONFIGURAÇÃO DO SERVIDOR GITHUB (VIA SECRETS) ---
+REPO_NAME = st.secrets.get("REPO_NAME", "Thysouzas/FluxoClaro")
 ARQUIVO_DADOS = "dados_fluxo.json"
 
 
+def obter_token():
+  try:
+    return st.secrets["GITHUB_TOKEN"]
+  except Exception:
+    return None
+
+
 def carregar_da_nuvem():
+  token = obter_token()
+  if not token:
+    return None
+
   url = f"https://api.github.com/repos/{REPO_NAME}/contents/{ARQUIVO_DADOS}"
   headers = {
-      "Authorization": f"token {GITHUB_TOKEN}",
+      "Authorization": f"token {token}",
       "Accept": "application/vnd.github.v3+json",
   }
 
@@ -46,9 +56,14 @@ def carregar_da_nuvem():
 
 
 def salvar_na_nuvem(dados_dict):
+  token = obter_token()
+  if not token:
+    st.error("Token do GitHub não configurado nos Secrets do Streamlit!")
+    return False
+
   url = f"https://api.github.com/repos/{REPO_NAME}/contents/{ARQUIVO_DADOS}"
   headers = {
-      "Authorization": f"token {GITHUB_TOKEN}",
+      "Authorization": f"token {token}",
       "Accept": "application/vnd.github.v3+json",
   }
 
@@ -235,7 +250,7 @@ with st.sidebar:
     if sucesso:
       st.success("Dados salvos com sucesso no servidor!")
     else:
-      st.error("Erro ao salvar no GitHub.")
+      st.error("Erro ao salvar. Verifique o token nos Secrets do Streamlit.")
 
   st.divider()
   st.subheader("Reserva de Emergência")

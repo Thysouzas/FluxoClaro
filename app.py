@@ -5,11 +5,9 @@ Identidade Visual Oficial:
 - Cores Principais: #001089, #9918ed, #6e1aac
 - Variação de Cores (Fundo Sempre Claro): #e8e9f9, #b9c2f9, #dfd3ea, #e9e8ea
 - Tipografia: Poppins Black (Títulos) e Poppins ExtraBold (Subtítulos)
-- Persistência: Sincronização em tempo real com Google Sheets.
 """
 
-import gspread
-from oauth2client.service_account import ServiceAccountCredentials
+import json
 import pandas as pd
 import plotly.express as px
 import streamlit as st
@@ -21,138 +19,7 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# --- CONFIGURAÇÃO DA CONEXÃO COM GOOGLE SHEETS ---
-
-
-@st.cache_resource
-def conectar_google_sheets():
-  try:
-    # Obtém as credenciais armazenadas de forma segura nos segredos do Streamlit
-    scope = [
-        "https://spreadsheets.google.com/feeds",
-        "https://www.googleapis.com/auth/drive",
-    ]
-    credentials_dict = dict(st.secrets["gcp_service_account"])
-    creds = ServiceAccountCredentials.from_json_keyfile_dict(
-        credentials_dict, scope
-    )
-    client = gspread.authorize(creds)
-    # Abre a planilha pelo nome ou ID configurado nos segredos
-    sheet_name = st.secrets.get("sheet_name", "FluxoClaro_DB")
-    spreadsheet = client.open(sheet_name)
-    worksheet = spreadsheet.get_worksheet(0)
-    return worksheet
-  except Exception as e:
-    return None
-
-
-def carregar_dados_gsheets(mes):
-  worksheet = conectar_google_sheets()
-  ent = {
-      "Salário Líquido (Pessoa 01)": 0.0,
-      "Salário Líquido (Pessoa 02)": 0.0,
-      "Vale-Alimentação (VA)": 0.0,
-      "Vale-Refeição (VR)": 0.0,
-      "Outras Entradas: Uber / Apps / Freelance": 0.0,
-      "Outras Entradas: Comissões / Bônus": 0.0,
-      "Outras Entradas: Aluguel / Dividendos": 0.0,
-  }
-  ess = {
-      "Moradia (Financiamento / Aluguel)": 0.0,
-      "Condomínio": 0.0,
-      "Supermercado": 0.0,
-      "Água e Saneamento": 0.0,
-      "Luz (Energia Elétrica)": 0.0,
-      "Gás (Encanado / Botijão)": 0.0,
-      "IPTU": 0.0,
-      "Plano de Saúde": 0.0,
-      "MEI (DAS)": 0.0,
-      "Investimentos Obrigatórios": 0.0,
-      "Faculdade / Educação": 0.0,
-  }
-  ness = {
-      "Cartão de Crédito PF": 0.0,
-      "Cartão de Crédito PJ": 0.0,
-      "Farmácia": 0.0,
-      "Gastos com Animais (Pet)": 0.0,
-      "Imprevistos": 0.0,
-      "Transporte (Ônibus / Trem / Uber)": 0.0,
-      "Veículo (Seguro / IPVA / Manutenção)": 0.0,
-      "Combustível": 0.0,
-      "Internet Residencial": 0.0,
-      "Streaming (Netflix / Amazon / Spotify)": 0.0,
-      "Padaria / Feira": 0.0,
-      "Lazer / Cinema / Restaurantes": 0.0,
-      "Salão / Manicure / Barbearia": 0.0,
-      "Tarifas Bancárias": 0.0,
-      "Telefonia Móvel": 0.0,
-      "Outras Despesas: Presentes e Diversos": 0.0,
-  }
-
-  if worksheet is None:
-    return ent, ess, ness
-
-  try:
-    dados = worksheet.get_all_records()
-    for row in dados:
-      if str(row.get("mes")) == str(mes):
-        grupo = str(row.get("grupo"))
-        cat = str(row.get("categoria"))
-        val = float(row.get("valor", 0.0))
-        if grupo == "entradas" and cat in ent:
-          ent[cat] = val
-        elif grupo == "essenciais" and cat in ess:
-          ess[cat] = val
-        elif grupo == "nao_essenciais" and cat in ness:
-          ness[cat] = val
-  except Exception:
-    pass
-
-  return ent, ess, ness
-
-
-def salvar_dados_gsheets(mes, ent, ess, ness):
-  worksheet = conectar_google_sheets()
-  if worksheet is None:
-    return
-
-  try:
-    dados_atuais = worksheet.get_all_records()
-    # Remove registos antigos do mês atual para reescrever limpo
-    novos_dados = [
-        row for row in dados_atuais if str(row.get("mes")) != str(mes)
-    ]
-
-    for k, v in ent.items():
-      novos_dados.append(
-          {"mes": mes, "grupo": "entradas", "categoria": k, "valor": float(v)}
-      )
-    for k, v in ess.items():
-      novos_dados.append(
-          {"mes": mes, "grupo": "essenciais", "categoria": k, "valor": float(v)}
-      )
-    for k, v in ness.items():
-      novos_dados.append(
-          {
-              "mes": mes,
-              "grupo": "nao_essenciais",
-              "categoria": k,
-              "valor": float(v),
-          }
-      )
-
-    # Reconstrói a folha de cálculo
-    worksheet.clear()
-    worksheet.append_row(["mes", "grupo", "categoria", "valor"])
-    for row in novos_dados:
-      worksheet.append_row(
-          [row["mes"], row["grupo"], row["categoria"], row["valor"]]
-      )
-  except Exception as e:
-    st.error(f"Erro ao salvar no Google Sheets: {e}")
-
-
-# CSS com Tipografia Poppins e Paleta Sempre Clara
+# CSS com Tipografia Poppins Black / ExtraBold e Paleta Sempre Clara
 st.markdown(
     """
 <style>
@@ -196,9 +63,80 @@ def format_brl(valor: float) -> str:
   return f"R$ {valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
 
-# Barra Lateral: Configurações & Mês de Referência
+# 1. Inicialização do Session State
+if "entradas" not in st.session_state:
+  st.session_state.entradas = {
+      "Salário Líquido (Pessoa 01)": 0.0,
+      "Salário Líquido (Pessoa 02)": 0.0,
+      "Vale-Alimentação (VA)": 0.0,
+      "Vale-Refeição (VR)": 0.0,
+      "Outras Entradas: Uber / Apps / Freelance": 0.0,
+      "Outras Entradas: Comissões / Bônus": 0.0,
+      "Outras Entradas: Aluguel / Dividendos": 0.0,
+  }
+
+if "essenciais" not in st.session_state:
+  st.session_state.essenciais = {
+      "Moradia (Financiamento / Aluguel)": 0.0,
+      "Condomínio": 0.0,
+      "Supermercado": 0.0,
+      "Água e Saneamento": 0.0,
+      "Luz (Energia Elétrica)": 0.0,
+      "Gás (Encanado / Botijão)": 0.0,
+      "IPTU": 0.0,
+      "Plano de Saúde": 0.0,
+      "MEI (DAS)": 0.0,
+      "Investimentos Obrigatórios": 0.0,
+      "Faculdade / Educação": 0.0,
+  }
+
+if "nao_essenciais" not in st.session_state:
+  st.session_state.nao_essenciais = {
+      "Cartão de Crédito PF": 0.0,
+      "Cartão de Crédito PJ": 0.0,
+      "Farmácia": 0.0,
+      "Gastos com Animais (Pet)": 0.0,
+      "Imprevistos": 0.0,
+      "Transporte (Ônibus / Trem / Uber)": 0.0,
+      "Veículo (Seguro / IPVA / Manutenção)": 0.0,
+      "Combustível": 0.0,
+      "Internet Residencial": 0.0,
+      "Streaming (Netflix / Amazon / Spotify)": 0.0,
+      "Padaria / Feira": 0.0,
+      "Lazer / Cinema / Restaurantes": 0.0,
+      "Salão / Manicure / Barbearia": 0.0,
+      "Tarifas Bancárias": 0.0,
+      "Telefonia Móvel": 0.0,
+      "Outras Despesas: Presentes e Diversos": 0.0,
+  }
+
+if "metas_economia" not in st.session_state:
+  st.session_state.metas_economia = [
+      {
+          "titulo": "Meta de Gasto com Lazer / Cinema",
+          "categoria": "Lazer / Cinema / Restaurantes",
+          "meta": 500.0,
+      },
+      {
+          "titulo": "Teto do Cartão de Crédito PF",
+          "categoria": "Cartão de Crédito PF",
+          "meta": 1000.0,
+      },
+      {
+          "titulo": "Orçamento de Supermercado",
+          "categoria": "Supermercado",
+          "meta": 1500.0,
+      },
+      {
+          "titulo": "Economia Mensal Livre p/ Viagem e Lazer Futuro",
+          "categoria": "SOBRA_MENSAL",
+          "meta": 500.0,
+      },
+  ]
+
+# Barra Lateral: Configurações, Reserva e Gestão de Backup
 with st.sidebar:
-  st.header("Configurações & Meses")
+  st.header("Configurações & Backup")
   mes_referencia = st.selectbox(
       "Mês de Referência",
       [
@@ -218,40 +156,42 @@ with st.sidebar:
       index=10,
   )
 
-  ent_banco, ess_banco, ness_banco = carregar_dados_gsheets(mes_referencia)
+  st.divider()
+  st.subheader("💾 Gestão de Dados (Backup)")
+  
+  dados_app = {
+      "entradas": st.session_state.entradas,
+      "essenciais": st.session_state.essenciais,
+      "nao_essenciais": st.session_state.nao_essenciais,
+  }
+  json_str = json.dumps(dados_app, ensure_ascii=False, indent=4)
+  st.download_button(
+      label="📥 Descarregar Backup",
+      data=json_str,
+      file_name="fluxoclaro_backup.json",
+      mime="application/json",
+      use_container_width=True,
+  )
 
-  if (
-      "mes_ativo" not in st.session_state
-      or st.session_state.mes_ativo != mes_referencia
-  ):
-    st.session_state.entradas = ent_banco
-    st.session_state.essenciais = ess_banco
-    st.session_state.nao_essenciais = ness_banco
-    st.session_state.mes_ativo = mes_referencia
-
-  if "metas_economia" not in st.session_state:
-    st.session_state.metas_economia = [
-        {
-            "titulo": "Meta de Gasto com Lazer / Cinema",
-            "categoria": "Lazer / Cinema / Restaurantes",
-            "meta": 500.0,
-        },
-        {
-            "titulo": "Teto do Cartão de Crédito PF",
-            "categoria": "Cartão de Crédito PF",
-            "meta": 1000.0,
-        },
-        {
-            "titulo": "Orçamento de Supermercado",
-            "categoria": "Supermercado",
-            "meta": 1500.0,
-        },
-        {
-            "titulo": "Economia Mensal Livre p/ Viagem e Lazer Futuro",
-            "categoria": "SOBRA_MENSAL",
-            "meta": 500.0,
-        },
-    ]
+  arquivo_carregado = st.file_uploader(
+      "📂 Restaurar Backup", type=["json"]
+  )
+  if arquivo_carregado is not None:
+    try:
+      dados_carregados = json.load(arquivo_carregado)
+      st.session_state.entradas = dados_carregados.get(
+          "entradas", st.session_state.entradas
+      )
+      st.session_state.essenciais = dados_carregados.get(
+          "essenciais", st.session_state.essenciais
+      )
+      st.session_state.nao_essenciais = dados_carregados.get(
+          "nao_essenciais", st.session_state.nao_essenciais
+      )
+      st.success("Backup restaurado com sucesso!")
+      st.rerun()
+    except Exception as e:
+      st.error(f"Erro ao ler o ficheiro: {e}")
 
   st.divider()
   st.subheader("Reserva de Emergência")
@@ -296,12 +236,6 @@ with st.sidebar:
     if st.button("Adicionar Categoria", use_container_width=True):
       if novo_nome.strip():
         dict_alvo[novo_nome.strip()] = float(novo_valor)
-        salvar_dados_gsheets(
-            mes_referencia,
-            st.session_state.entradas,
-            st.session_state.essenciais,
-            st.session_state.nao_essenciais,
-        )
         st.rerun()
 
   elif acao_cat == "Renomear Categoria":
@@ -312,12 +246,6 @@ with st.sidebar:
         if cat_nova.strip() and cat_nova.strip() != cat_antiga:
           valor_atual = dict_alvo.pop(cat_antiga)
           dict_alvo[cat_nova.strip()] = valor_atual
-          salvar_dados_gsheets(
-              mes_referencia,
-              st.session_state.entradas,
-              st.session_state.essenciais,
-              st.session_state.nao_essenciais,
-          )
           st.rerun()
 
   elif acao_cat == "Excluir Categoria":
@@ -329,12 +257,6 @@ with st.sidebar:
           "Confirmar Exclusão", type="primary", use_container_width=True
       ):
         dict_alvo.pop(cat_excluir, None)
-        salvar_dados_gsheets(
-            mes_referencia,
-            st.session_state.entradas,
-            st.session_state.essenciais,
-            st.session_state.nao_essenciais,
-        )
         st.rerun()
 
 # Cálculos Automáticos Globais
@@ -390,21 +312,12 @@ aba_planilha, aba_graficos, aba_metas = st.tabs([
 
 with aba_planilha:
   col_ent, col_ess, col_ness = st.columns(3, gap="medium")
-  dados_alterados = False
-
   with col_ent:
     st.subheader("1. Entradas")
     for k, v in list(st.session_state.entradas.items()):
-      novo_val = st.number_input(
-          k,
-          min_value=0.0,
-          value=float(v),
-          step=50.0,
-          key=f"ent_{mes_referencia}_{k}",
+      st.session_state.entradas[k] = st.number_input(
+          k, min_value=0.0, value=float(v), step=50.0, key=f"ent_{k}"
       )
-      if novo_val != v:
-        st.session_state.entradas[k] = novo_val
-        dados_alterados = True
     st.info(
         f"**TOTAL DE ENTRADAS:**"
         f" {format_brl(sum(st.session_state.entradas.values()))}"
@@ -413,16 +326,9 @@ with aba_planilha:
   with col_ess:
     st.subheader("2. Despesas Essenciais")
     for k, v in list(st.session_state.essenciais.items()):
-      novo_val = st.number_input(
-          k,
-          min_value=0.0,
-          value=float(v),
-          step=25.0,
-          key=f"ess_{mes_referencia}_{k}",
+      st.session_state.essenciais[k] = st.number_input(
+          k, min_value=0.0, value=float(v), step=25.0, key=f"ess_{k}"
       )
-      if novo_val != v:
-        st.session_state.essenciais[k] = novo_val
-        dados_alterados = True
     st.info(
         f"**TOTAL DESPESAS ESSENCIAIS:**"
         f" {format_brl(sum(st.session_state.essenciais.values()))}"
@@ -431,30 +337,13 @@ with aba_planilha:
   with col_ness:
     st.subheader("3. Despesas Não Essenciais")
     for k, v in list(st.session_state.nao_essenciais.items()):
-      novo_val = st.number_input(
-          k,
-          min_value=0.0,
-          value=float(v),
-          step=20.0,
-          key=f"ness_{mes_referencia}_{k}",
+      st.session_state.nao_essenciais[k] = st.number_input(
+          k, min_value=0.0, value=float(v), step=20.0, key=f"ness_{k}"
       )
-      if novo_val != v:
-        st.session_state.nao_essenciais[k] = novo_val
-        dados_alterados = True
     st.info(
         f"**TOTAL NÃO ESSENCIAIS:**"
         f" {format_brl(sum(st.session_state.nao_essenciais.values()))}"
     )
-
-  # Salva automaticamente no Google Sheets se houver alteração
-  if dados_alterados:
-    salvar_dados_gsheets(
-        mes_referencia,
-        st.session_state.entradas,
-        st.session_state.essenciais,
-        st.session_state.nao_essenciais,
-    )
-    st.rerun()
 
 with aba_graficos:
   st.subheader(

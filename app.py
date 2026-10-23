@@ -174,9 +174,22 @@ ordem_meses = [
 # Inicialização dos dados globais da nuvem
 if "dados_meses" not in st.session_state:
   nuvem = carregar_da_nuvem()
-  st.session_state.dados_meses = (
-      nuvem if nuvem and isinstance(nuvem, dict) else {}
-  )
+  if nuvem and isinstance(nuvem, dict):
+    st.session_state.dados_meses = nuvem
+    if "meta_reserva_alvo" in nuvem:
+      st.session_state.meta_reserva_alvo = float(nuvem["meta_reserva_alvo"])
+    if "saldo_atual_reserva" in nuvem:
+      st.session_state.saldo_atual_reserva = float(nuvem["saldo_atual_reserva"])
+    if "metas_economia" in nuvem:
+      st.session_state.metas_economia = nuvem["metas_economia"]
+  else:
+    st.session_state.dados_meses = {}
+
+if "meta_reserva_alvo" not in st.session_state:
+  st.session_state.meta_reserva_alvo = 10000.0
+
+if "saldo_atual_reserva" not in st.session_state:
+  st.session_state.saldo_atual_reserva = 0.0
 
 if "metas_economia" not in st.session_state:
   st.session_state.metas_economia = []
@@ -225,9 +238,13 @@ with st.sidebar:
         "entradas": st.session_state.entradas,
         "essenciais": st.session_state.essenciais,
         "nao_essenciais": st.session_state.nao_essenciais,
-        "metas_economia": st.session_state.metas_economia,
     }
-    sucesso = salvar_na_nuvem(st.session_state.dados_meses)
+    pacote_global = st.session_state.dados_meses.copy()
+    pacote_global["meta_reserva_alvo"] = st.session_state.meta_reserva_alvo
+    pacote_global["saldo_atual_reserva"] = st.session_state.saldo_atual_reserva
+    pacote_global["metas_economia"] = st.session_state.metas_economia
+
+    sucesso = salvar_na_nuvem(pacote_global)
     if sucesso:
       st.success("Dados salvos com sucesso no servidor!")
     else:
@@ -235,14 +252,17 @@ with st.sidebar:
 
   st.divider()
   st.subheader("Reserva de Emergência")
-  meses_reserva = st.radio(
-      "Multiplicador Ideal (sobre gastos essenciais)",
-      options=[3, 6, 12],
-      index=1,
-      format_func=lambda x: f"{x} meses de custo essencial",
+  st.session_state.meta_reserva_alvo = st.number_input(
+      "Valor Almejado da Reserva (R$)",
+      min_value=0.0,
+      value=float(st.session_state.meta_reserva_alvo),
+      step=500.0,
   )
-  saldo_atual_reserva = st.number_input(
-      "Saldo Atual da Reserva (R$)", min_value=0.0, value=0.0, step=100.0
+  st.session_state.saldo_atual_reserva = st.number_input(
+      "Saldo Atual da Reserva (R$)",
+      min_value=0.0,
+      value=float(st.session_state.saldo_atual_reserva),
+      step=100.0,
   )
 
   st.divider()
@@ -312,7 +332,6 @@ total_essenciais = sum(st.session_state.essenciais.values())
 total_nao_essenciais = sum(st.session_state.nao_essenciais.values())
 total_despesas = total_essenciais + total_nao_essenciais
 sobra_mensal = total_entradas - total_despesas
-reserva_ideal = total_essenciais * meses_reserva
 
 # Cálculo do Saldo Acumulado (Caixinha) de Janeiro até o Mês Selecionado
 try:
@@ -348,206 +367,4 @@ c3.metric(
     "3. Despesas Não Essenciais",
     format_brl(total_nao_essenciais),
     (
-        f"{(total_nao_essenciais/total_entradas*100 if total_entradas else 0):.1f}%"
-        " da renda"
-    ),
-)
-c4.metric(
-    "4. Sobra Mensal Prevista",
-    format_brl(sobra_mensal),
-    (
-        f"{(sobra_mensal/total_entradas*100 if total_entradas else 0):+.1f}%"
-        " margem"
-    ),
-)
-c5.metric(
-    "5. Saldo Acumulado (Caixinha)",
-    format_brl(saldo_acumulado),
-    "Acumulado no ano",
-)
-c6.metric(
-    f"6. Reserva Ideal ({meses_reserva}m)",
-    format_brl(reserva_ideal),
-    f"Faltam {format_brl(max(0.0, reserva_ideal - saldo_atual_reserva))}",
-)
-
-st.divider()
-
-aba_planilha, aba_graficos, aba_metas = st.tabs([
-    "📋 Planilha de Entradas e Despesas",
-    "📊 Evolução & Comparações Mensais",
-    "🎯 Metas de Economia",
-])
-
-with aba_planilha:
-  col_ent, col_ess, col_ness = st.columns(3, gap="medium")
-  with col_ent:
-    st.subheader("1. Entradas")
-    for k, v in list(st.session_state.entradas.items()):
-      st.session_state.entradas[k] = st.number_input(
-          k, min_value=0.0, value=float(v), step=50.0, key=f"ent_{k}"
-      )
-    st.info(
-        f"**TOTAL DE ENTRADAS:**"
-        f" {format_brl(sum(st.session_state.entradas.values()))}"
-    )
-
-  with col_ess:
-    st.subheader("2. Despesas Essenciais")
-    for k, v in list(st.session_state.essenciais.items()):
-      st.session_state.essenciais[k] = st.number_input(
-          k, min_value=0.0, value=float(v), step=25.0, key=f"ess_{k}"
-      )
-    st.info(
-        f"**TOTAL DESPESAS ESSENCIAIS:**"
-        f" {format_brl(sum(st.session_state.essenciais.values()))}"
-    )
-
-  with col_ness:
-    st.subheader("3. Despesas Não Essenciais")
-    for k, v in list(st.session_state.nao_essenciais.items()):
-      st.session_state.nao_essenciais[k] = st.number_input(
-          k, min_value=0.0, value=float(v), step=20.0, key=f"ness_{k}"
-      )
-    st.info(
-        f"**TOTAL NÃO ESSENCIAIS:**"
-        f" {format_brl(sum(st.session_state.nao_essenciais.values()))}"
-    )
-
-with aba_graficos:
-  st.subheader("1. Evolução em Coluna Mensal (Entradas vs Despesas)")
-
-  historico_data = []
-  for m in ordem_meses:
-    if m in st.session_state.dados_meses:
-      d = st.session_state.dados_meses[m]
-      t_ent = sum(d.get("entradas", {}).values())
-      t_ess = sum(d.get("essenciais", {}).values())
-      t_ness = sum(d.get("nao_essenciais", {}).values())
-
-      historico_data.append(
-          {"Mês": m, "Categoria": "Entradas", "Valor": t_ent}
-      )
-      historico_data.append(
-          {"Mês": m, "Categoria": "Despesas Essenciais", "Valor": t_ess}
-      )
-      historico_data.append(
-          {"Mês": m, "Categoria": "Despesas Não Essenciais", "Valor": t_ness}
-      )
-
-  df_hist = pd.DataFrame(historico_data)
-
-  if not df_hist.empty:
-    fig_colunas = px.bar(
-        df_hist,
-        x="Mês",
-        y="Valor",
-        color="Categoria",
-        barmode="group",
-        text_auto=".2f",
-        color_discrete_map={
-            "Entradas": "#001089",
-            "Despesas Essenciais": "#6e1aac",
-            "Despesas Não Essenciais": "#9918ed",
-        },
-        title="Comparativo Mensal de Entradas e Despesas",
-    )
-    fig_colunas.update_layout(
-        paper_bgcolor="#FFFFFF", plot_bgcolor="#FFFFFF", font_color="#001089"
-    )
-    st.plotly_chart(fig_colunas, use_container_width=True)
-
-  st.divider()
-  st.subheader("2. Comparação da Sobra Mensal ao Longo do Tempo")
-
-  sobra_data = []
-  for m in ordem_meses:
-    if m in st.session_state.dados_meses:
-      d = st.session_state.dados_meses[m]
-      t_ent = sum(d.get("entradas", {}).values())
-      t_esp = sum(d.get("essenciais", {}).values()) + sum(
-          d.get("nao_essenciais", {}).values()
-      )
-      sobra_val = t_ent - t_esp
-      if t_ent > 0 or t_esp > 0:
-        sobra_data.append({"Mês": m, "Sobra Mensal": sobra_val})
-
-  df_sobra = pd.DataFrame(sobra_data)
-  if not df_sobra.empty:
-    fig_sobra = px.bar(
-        df_sobra,
-        x="Mês",
-        y="Sobra Mensal",
-        text_auto=".2f",
-        color="Sobra Mensal",
-        color_continuous_scale=["#9918ed", "#001089"],
-        title="Evolução da Sobra Financeira Mensal",
-    )
-    fig_sobra.update_layout(
-        paper_bgcolor="#FFFFFF", plot_bgcolor="#FFFFFF", font_color="#001089"
-    )
-    st.plotly_chart(fig_sobra, use_container_width=True)
-  else:
-    st.info(
-        "Preencha os valores na planilha e clique em 'Salvar / Confirmar na"
-        " Nuvem' para visualizar o histórico temporal."
-    )
-
-with aba_metas:
-  st.subheader("Minhas Metas de Economia")
-  todas_categorias_despesa = {
-      **st.session_state.essenciais,
-      **st.session_state.nao_essenciais,
-  }
-
-  with st.expander("➕ Adicionar Nova Meta de Economia"):
-    m_titulo = st.text_input("Descrição da Meta (ex: Viagem em Família)")
-    m_cat = st.selectbox(
-        "Categoria Vinculada",
-        ["SOBRA_MENSAL"] + list(todas_categorias_despesa.keys()),
-    )
-    m_valor = st.number_input(
-        "Valor da Meta / Teto (R$)", min_value=10.0, value=500.0, step=50.0
-    )
-    if st.button("Salvar Meta"):
-      st.session_state.metas_economia.append({
-          "titulo": m_titulo or f"Meta {m_cat}",
-          "categoria": m_cat,
-          "meta": float(m_valor),
-      })
-      st.success(
-          "Meta adicionada! Lembre-se de clicar em 'Salvar na Nuvem' para"
-          " gravar."
-      )
-      st.rerun()
-
-  if not st.session_state.metas_economia:
-    st.info(
-        "Ainda não tem nenhuma meta cadastrada. Use o botão acima para criar"
-        " a sua primeira meta!"
-    )
-  else:
-    st.divider()
-    for idx, meta in enumerate(list(st.session_state.metas_economia)):
-      cat = meta["categoria"]
-      alvo = meta["meta"]
-      real = (
-          max(0.0, sobra_mensal)
-          if cat == "SOBRA_MENSAL"
-          else todas_categorias_despesa.get(cat, 0.0)
-      )
-      pct = min(1.0, real / alvo) if alvo > 0 else 0.0
-
-      col_m1, col_m2 = st.columns([5, 1])
-      with col_m1:
-        st.markdown(
-            f"**{meta['titulo']}** — Atual: {format_brl(real)} / Meta:"
-            f" {format_brl(alvo)}"
-        )
-        st.progress(pct)
-      with col_m2:
-        st.write("")
-        if st.button("🗑️ Excluir", key=f"del_meta_{idx}"):
-          st.session_state.metas_economia.pop(idx)
-          st.success("Meta excluída. Clique em 'Salvar na Nuvem' para atualizar.")
-          st.rerun()
+        f"{(total_nao_essenciais/total_entradas*100 if total_entradas else 0):
